@@ -74,6 +74,11 @@ public class SchoolClassRepository(ApplicationDbContext db) : ISchoolClassReposi
     public Task<SchoolClass?> GetByIdForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct) =>
         db.SchoolClasses.FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == id, ct);
 
+    public Task<SchoolClass?> GetByIdWithSectionsForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct) =>
+        db.SchoolClasses
+            .Include(x => x.Sections)
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == id, ct);
+
     public async Task<bool> HasLinkedStudentsOrAssignmentsAsync(Guid tenantId, Guid id, CancellationToken ct)
     {
         var hasStudents = await db.Students.AnyAsync(

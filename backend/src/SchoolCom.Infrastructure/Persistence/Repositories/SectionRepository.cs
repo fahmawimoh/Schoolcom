@@ -103,6 +103,25 @@ public class SectionRepository(ApplicationDbContext db) : ISectionRepository
     public Task<bool> SchoolClassExistsAsync(Guid tenantId, Guid schoolClassId, CancellationToken ct) =>
         db.SchoolClasses.AnyAsync(x => x.TenantId == tenantId && x.Id == schoolClassId, ct);
 
+    public Task<bool> ClassSectionExistsAsync(
+        Guid tenantId,
+        Guid schoolClassId,
+        string nameEn,
+        Guid? excludeSectionId,
+        CancellationToken ct)
+    {
+        var normalized = nameEn.Trim().ToLower();
+        var query = db.Sections.Where(x =>
+            x.TenantId == tenantId &&
+            x.SchoolClassId == schoolClassId &&
+            x.NameEn.ToLower() == normalized);
+
+        if (excludeSectionId.HasValue)
+            query = query.Where(x => x.Id != excludeSectionId.Value);
+
+        return query.AnyAsync(ct);
+    }
+
     public async Task<bool> HasLinkedStudentsTeachersOrTimetableAsync(Guid tenantId, Guid id, CancellationToken ct)
     {
         if (await db.Students.AnyAsync(s => s.TenantId == tenantId && s.SectionId == id, ct))

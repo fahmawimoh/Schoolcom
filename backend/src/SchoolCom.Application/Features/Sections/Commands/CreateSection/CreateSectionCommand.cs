@@ -1,5 +1,7 @@
 using FluentValidation;
 using MediatR;
+using SchoolCom.Application.Common;
+using SchoolCom.Application.Common.Exceptions;
 using SchoolCom.Application.Common.Interfaces;
 using SchoolCom.Domain.Entities;
 
@@ -37,6 +39,16 @@ public class CreateSectionCommandHandler(
 
         if (!await repo.SchoolClassExistsAsync(tenantId, request.SchoolClassId, ct))
             throw new KeyNotFoundException("School class not found");
+
+        if (await repo.ClassSectionExistsAsync(
+                tenantId, request.SchoolClassId, request.NameEn, excludeSectionId: null, ct))
+        {
+            throw new ConflictException(
+                AcademicErrorCodes.ClassSectionDuplicate,
+                AcademicErrorMessages.ClassSectionDuplicateEn,
+                AcademicErrorMessages.ClassSectionDuplicateAr,
+                AcademicTranslationKeys.ClassSectionDuplicate);
+        }
 
         var entity = new Section
         {

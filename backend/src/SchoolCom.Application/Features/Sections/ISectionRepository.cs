@@ -26,6 +26,13 @@ public interface ISectionRepository
 
     Task<bool> SchoolClassExistsAsync(Guid tenantId, Guid schoolClassId, CancellationToken ct);
 
+    Task<bool> ClassSectionExistsAsync(
+        Guid tenantId,
+        Guid schoolClassId,
+        string nameEn,
+        Guid? excludeSectionId,
+        CancellationToken ct);
+
     Task<bool> HasLinkedStudentsTeachersOrTimetableAsync(Guid tenantId, Guid id, CancellationToken ct);
 
     Task AddAsync(Section entity, CancellationToken ct);

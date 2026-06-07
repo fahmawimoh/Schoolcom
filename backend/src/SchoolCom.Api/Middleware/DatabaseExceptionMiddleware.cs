@@ -33,10 +33,17 @@ public class DatabaseExceptionMiddleware(RequestDelegate next, ILogger<DatabaseE
         }
     }
 
+    private static bool IsClassSectionConstraint(string? constraintName) =>
+        constraintName is "IX_sections_TenantId_SchoolClassId_NameEn"
+            or "UQ_class_sections_school_class_id_section_name";
+
     private static (HttpStatusCode Status, string Title, string Detail) MapPostgresError(PostgresException ex) =>
         ex.SqlState switch
         {
-            PostgresErrorCodes.UniqueViolation => (HttpStatusCode.Conflict, "Duplicate entry", "A record with the same unique value already exists."),
+            PostgresErrorCodes.UniqueViolation when IsClassSectionConstraint(ex.ConstraintName) =>
+                (HttpStatusCode.Conflict, "Duplicate entry", "This class-section combination already exists."),
+            PostgresErrorCodes.UniqueViolation =>
+                (HttpStatusCode.Conflict, "Duplicate entry", "A record with the same unique value already exists."),
             PostgresErrorCodes.ForeignKeyViolation => (HttpStatusCode.BadRequest, "Invalid reference", "The operation references a record that does not exist."),
             PostgresErrorCodes.NotNullViolation => (HttpStatusCode.BadRequest, "Missing required field", "A required value was not provided."),
             PostgresErrorCodes.CheckViolation => (HttpStatusCode.BadRequest, "Validation failed", "The value does not meet database constraints."),

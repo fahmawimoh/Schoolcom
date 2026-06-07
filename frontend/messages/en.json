@@ -197,11 +197,18 @@
     "pageInfo": "Page {page} of {totalPages}",
     "previous": "Previous",
     "next": "Next",
+    "sectionsLabel": "Sections",
+    "sectionsHint": "Select one or more sections for this school class.",
+    "selectSections": "Select sections",
+    "sectionAlreadyAssigned": "This section is already assigned to this class",
+    "existingSections": "Existing sections",
     "validation": {
       "fixErrors": "Please fix the highlighted fields before saving.",
       "nameEnRequired": "English name is required",
       "nameArRequired": "Arabic name is required",
-      "sortOrderInvalid": "Sort order must be zero or greater"
+      "sortOrderInvalid": "Sort order must be zero or greater",
+      "sectionDuplicate": "Each section can only be selected once",
+      "classSectionDuplicate": "This class-section combination already exists."
     },
     "saveFailed": "Could not save school class. Please try again."
   },
@@ -239,11 +246,13 @@
     "pageInfo": "Page {page} of {totalPages}",
     "previous": "Previous",
     "next": "Next",
+    "sectionAlreadyAssigned": "This section is already assigned to this class",
     "validation": {
       "fixErrors": "Please fix the highlighted fields before saving.",
       "schoolClassRequired": "Please select a school class",
       "nameEnRequired": "English name is required",
-      "nameArRequired": "Arabic name is required"
+      "nameArRequired": "Arabic name is required",
+      "classSectionDuplicate": "This class-section combination already exists."
     },
     "saveFailed": "Could not save section. Please try again."
   },

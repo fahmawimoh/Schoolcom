@@ -11,7 +11,8 @@ public record CreateSchoolClassCommand(
     string? DescriptionEn,
     string? DescriptionAr,
     int SortOrder,
-    bool IsActive = true) : IRequest<SchoolClassDto>;
+    bool IsActive = true,
+    IReadOnlyList<SchoolClassSectionInput>? Sections = null) : IRequest<SchoolClassDto>;
 
 public class CreateSchoolClassCommandValidator : AbstractValidator<CreateSchoolClassCommand>
 {
@@ -22,6 +23,11 @@ public class CreateSchoolClassCommandValidator : AbstractValidator<CreateSchoolC
         RuleFor(x => x.DescriptionEn).MaximumLength(500);
         RuleFor(x => x.DescriptionAr).MaximumLength(500);
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
+        RuleForEach(x => x.Sections).ChildRules(section =>
+        {
+            section.RuleFor(s => s.NameEn).NotEmpty().MaximumLength(100);
+            section.RuleFor(s => s.NameAr).NotEmpty().MaximumLength(100);
+        });
     }
 }
 
@@ -35,6 +41,8 @@ public class CreateSchoolClassCommandHandler(
         var tenantId = currentUser.TenantId
             ?? throw new UnauthorizedAccessException("Tenant not found");
 
+        SchoolClassSectionValidator.EnsureNoDuplicateNamesInRequest(request.Sections);
+
         var entity = new SchoolClass
         {
             TenantId = tenantId,
@@ -46,12 +54,26 @@ public class CreateSchoolClassCommandHandler(
             IsActive = request.IsActive
         };
 
+        if (request.Sections is { Count: > 0 })
+        {
+            foreach (var section in request.Sections)
+            {
+                entity.Sections.Add(new Section
+                {
+                    TenantId = tenantId,
+                    NameEn = section.NameEn.Trim(),
+                    NameAr = section.NameAr.Trim(),
+                    IsActive = true
+                });
+            }
+        }
+
         await repo.AddAsync(entity, ct);
         await repo.SaveChangesAsync(ct);
         await audit.LogAsync("Create", "SchoolClass", entity.Id, ct: ct);
 
         return new SchoolClassDto(
             entity.Id, entity.NameEn, entity.NameAr, entity.DescriptionEn, entity.DescriptionAr,
-            entity.SortOrder, entity.IsActive, 0, 0, entity.CreatedAt);
+            entity.SortOrder, entity.IsActive, entity.Sections.Count, 0, entity.CreatedAt);
     }
 }

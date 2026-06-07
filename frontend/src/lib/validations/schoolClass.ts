@@ -4,6 +4,7 @@ export type SchoolClassValidationMessages = {
   nameEnRequired: string;
   nameArRequired: string;
   sortOrderInvalid: string;
+  sectionDuplicate: string;
 };
 
 export function createSchoolClassFormSchema(messages: SchoolClassValidationMessages) {
@@ -19,6 +20,12 @@ export function createSchoolClassFormSchema(messages: SchoolClassValidationMessa
         messages.sortOrderInvalid
       ),
     isActive: z.boolean(),
+    selectedSections: z
+      .array(z.string())
+      .refine(
+        (keys) => keys.length === new Set(keys.map((k) => k.trim().toLowerCase())).size,
+        messages.sectionDuplicate
+      ),
   });
 }
 

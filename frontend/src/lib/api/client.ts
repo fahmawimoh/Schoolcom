@@ -40,6 +40,8 @@ export interface ApiErrorBody {
   translationKey?: string;
   title?: string;
   message?: string;
+  messageEn?: string;
+  messageAr?: string;
   errors?: Array<{ message?: string; field?: string }>;
 }
 
@@ -111,6 +113,7 @@ export async function apiFetch<T>(
     const message =
       body?.errors?.[0]?.message ??
       body?.title ??
+      body?.messageEn ??
       body?.message ??
       "Request failed";
 

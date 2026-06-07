@@ -4,6 +4,7 @@ export type SectionValidationMessages = {
   schoolClassRequired: string;
   nameEnRequired: string;
   nameArRequired: string;
+  classSectionDuplicate: string;
 };
 
 export function createSectionFormSchema(messages: SectionValidationMessages) {

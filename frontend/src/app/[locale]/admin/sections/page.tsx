@@ -28,7 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiRequestError } from "@/lib/api/client";
+import { getLocalizedApiErrorMessage } from "@/lib/api/error-messages";
 import {
   type CreateSectionPayload,
   type Section,
@@ -36,6 +36,7 @@ import {
   schoolClassesApi,
   sectionsApi,
 } from "@/lib/api/academic";
+import { normalizeSectionName } from "@/lib/academic/section-presets";
 import {
   createSectionFormSchema,
   type SectionFormValues,
@@ -47,12 +48,6 @@ const PAGE_SIZE = 10;
 
 const fieldClass = (hasError: boolean) =>
   cn(hasError && "border-destructive focus-visible:ring-destructive");
-
-function getSaveErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiRequestError) return err.message;
-  if (err instanceof Error && err.message) return err.message;
-  return fallback;
-}
 
 export default function AdminSectionsPage() {
   const t = useTranslations("sections");
@@ -69,6 +64,7 @@ export default function AdminSectionsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Section | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [assignedSectionNames, setAssignedSectionNames] = useState<string[]>([]);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -98,14 +94,32 @@ export default function AdminSectionsPage() {
     enabled: isAdmin,
   });
 
+  const blockedSectionNames = useMemo(() => {
+    if (!editingItem) return assignedSectionNames;
+
+    const currentName = normalizeSectionName(editingItem.nameEn);
+    return assignedSectionNames.filter(
+      (name) => normalizeSectionName(name) !== currentName
+    );
+  }, [assignedSectionNames, editingItem]);
+
   const formSchema = useMemo(
     () =>
       createSectionFormSchema({
         schoolClassRequired: tValidation("schoolClassRequired"),
         nameEnRequired: tValidation("nameEnRequired"),
         nameArRequired: tValidation("nameArRequired"),
+        classSectionDuplicate: tValidation("classSectionDuplicate"),
       }),
     [tValidation]
+  );
+
+  const getSaveErrorMessage = useCallback(
+    (err: unknown, fallback: string) =>
+      getLocalizedApiErrorMessage(err, locale, fallback, (key) =>
+        tValidation(key as "classSectionDuplicate")
+      ),
+    [locale, tValidation]
   );
 
   const form = useForm<SectionFormValues>({
@@ -120,6 +134,33 @@ export default function AdminSectionsPage() {
       isActive: true,
     },
   });
+
+  const watchedSchoolClassId = form.watch("schoolClassId");
+  const watchedNameEn = form.watch("nameEn");
+
+  useEffect(() => {
+    if (!watchedSchoolClassId || !dialogOpen) {
+      setAssignedSectionNames([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    sectionsApi
+      .getBySchoolClass(watchedSchoolClassId)
+      .then((sections) => {
+        if (!cancelled) {
+          setAssignedSectionNames(sections.map((s) => s.sectionNameEn));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAssignedSectionNames([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen, watchedSchoolClassId]);
 
   const fieldError = (name: FieldPath<SectionFormValues>) =>
     form.formState.errors[name]?.message;
@@ -176,6 +217,7 @@ export default function AdminSectionsPage() {
 
   const openCreate = () => {
     setEditingItem(null);
+    setAssignedSectionNames([]);
     const defaultClassId = schoolClasses?.items[0]?.id ?? "";
     form.reset({
       schoolClassId: defaultClassId,
@@ -190,6 +232,7 @@ export default function AdminSectionsPage() {
 
   const openEdit = (item: Section) => {
     setEditingItem(item);
+    setAssignedSectionNames([]);
     form.reset({
       schoolClassId: item.schoolClassId,
       nameEn: item.nameEn,
@@ -201,7 +244,29 @@ export default function AdminSectionsPage() {
     setDialogOpen(true);
   };
 
+  const isDuplicateNameEn = useMemo(() => {
+    if (!watchedNameEn.trim()) return false;
+    return blockedSectionNames.some(
+      (name) =>
+        normalizeSectionName(name) === normalizeSectionName(watchedNameEn)
+    );
+  }, [blockedSectionNames, watchedNameEn]);
+
   const onSubmit = (values: SectionFormValues) => {
+    const duplicate = blockedSectionNames.some(
+      (name) =>
+        normalizeSectionName(name) === normalizeSectionName(values.nameEn)
+    );
+
+    if (duplicate) {
+      form.setError("nameEn", {
+        type: "manual",
+        message: tValidation("classSectionDuplicate"),
+      });
+      toast.error(tValidation("classSectionDuplicate"));
+      return;
+    }
+
     if (editingItem) {
       updateMutation.mutate({
         id: editingItem.id,
@@ -472,6 +537,12 @@ export default function AdminSectionsPage() {
                       {fieldError("schoolClassId")}
                     </p>
                   )}
+                  {!editingItem && assignedSectionNames.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {t("sectionAlreadyAssigned")}:{" "}
+                      {assignedSectionNames.join(", ")}
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
@@ -483,9 +554,9 @@ export default function AdminSectionsPage() {
                       className={fieldClass(!!fieldError("nameEn"))}
                       {...form.register("nameEn")}
                     />
-                    {fieldError("nameEn") && (
+                    {(fieldError("nameEn") || isDuplicateNameEn) && (
                       <p className="text-xs text-destructive" role="alert">
-                        {fieldError("nameEn")}
+                        {fieldError("nameEn") ?? tValidation("classSectionDuplicate")}
                       </p>
                     )}
                   </div>

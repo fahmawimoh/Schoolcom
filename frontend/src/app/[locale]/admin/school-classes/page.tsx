@@ -28,13 +28,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiRequestError } from "@/lib/api/client";
+import { getLocalizedApiErrorMessage } from "@/lib/api/error-messages";
 import {
   type CreateSchoolClassPayload,
   type SchoolClass,
+  type SchoolClassSectionInput,
   type UpdateSchoolClassPayload,
   schoolClassesApi,
+  sectionsApi,
 } from "@/lib/api/academic";
+import {
+  SECTION_PRESETS,
+  normalizeSectionName,
+} from "@/lib/academic/section-presets";
 import {
   createSchoolClassFormSchema,
   type SchoolClassFormValues,
@@ -46,12 +52,6 @@ const PAGE_SIZE = 10;
 
 const fieldClass = (hasError: boolean) =>
   cn(hasError && "border-destructive focus-visible:ring-destructive");
-
-function getSaveErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiRequestError) return err.message;
-  if (err instanceof Error && err.message) return err.message;
-  return fallback;
-}
 
 export default function AdminSchoolClassesPage() {
   const t = useTranslations("schoolClasses");
@@ -67,6 +67,7 @@ export default function AdminSchoolClassesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SchoolClass | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [assignedSectionNames, setAssignedSectionNames] = useState<string[]>([]);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -95,8 +96,17 @@ export default function AdminSchoolClassesPage() {
         nameEnRequired: tValidation("nameEnRequired"),
         nameArRequired: tValidation("nameArRequired"),
         sortOrderInvalid: tValidation("sortOrderInvalid"),
+        sectionDuplicate: tValidation("sectionDuplicate"),
       }),
     [tValidation]
+  );
+
+  const getSaveErrorMessage = useCallback(
+    (err: unknown, fallback: string) =>
+      getLocalizedApiErrorMessage(err, locale, fallback, (key) =>
+        tValidation(key as "classSectionDuplicate")
+      ),
+    [locale, tValidation]
   );
 
   const form = useForm<SchoolClassFormValues>({
@@ -109,8 +119,11 @@ export default function AdminSchoolClassesPage() {
       descriptionAr: "",
       sortOrder: "0",
       isActive: true,
+      selectedSections: [],
     },
   });
+
+  const selectedSections = form.watch("selectedSections");
 
   const fieldError = (name: FieldPath<SchoolClassFormValues>) =>
     form.formState.errors[name]?.message;
@@ -165,8 +178,14 @@ export default function AdminSchoolClassesPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  const loadAssignedSections = useCallback(async (schoolClassId: string) => {
+    const sections = await sectionsApi.getBySchoolClass(schoolClassId);
+    setAssignedSectionNames(sections.map((s) => s.sectionNameEn));
+  }, []);
+
   const openCreate = () => {
     setEditingItem(null);
+    setAssignedSectionNames([]);
     form.reset({
       nameEn: "",
       nameAr: "",
@@ -174,12 +193,14 @@ export default function AdminSchoolClassesPage() {
       descriptionAr: "",
       sortOrder: "0",
       isActive: true,
+      selectedSections: [],
     });
     setDialogOpen(true);
   };
 
-  const openEdit = (item: SchoolClass) => {
+  const openEdit = async (item: SchoolClass) => {
     setEditingItem(item);
+    setAssignedSectionNames([]);
     form.reset({
       nameEn: item.nameEn,
       nameAr: item.nameAr,
@@ -187,11 +208,47 @@ export default function AdminSchoolClassesPage() {
       descriptionAr: item.descriptionAr ?? "",
       sortOrder: String(item.sortOrder),
       isActive: item.isActive,
+      selectedSections: [],
     });
     setDialogOpen(true);
+    try {
+      await loadAssignedSections(item.id);
+    } catch {
+      setAssignedSectionNames([]);
+    }
+  };
+
+  const assignedSectionSet = useMemo(
+    () => new Set(assignedSectionNames.map(normalizeSectionName)),
+    [assignedSectionNames]
+  );
+
+  const buildSectionsPayload = (
+    keys: string[]
+  ): SchoolClassSectionInput[] =>
+    SECTION_PRESETS.filter((preset) => keys.includes(preset.nameEn)).map(
+      (preset) => ({
+        nameEn: preset.nameEn,
+        nameAr: preset.nameAr,
+      })
+    );
+
+  const toggleSection = (nameEn: string) => {
+    if (assignedSectionSet.has(normalizeSectionName(nameEn))) {
+      toast.error(t("sectionAlreadyAssigned"));
+      return;
+    }
+
+    const current = form.getValues("selectedSections");
+    const next = current.includes(nameEn)
+      ? current.filter((key) => key !== nameEn)
+      : [...current, nameEn];
+
+    form.setValue("selectedSections", next, { shouldValidate: true });
   };
 
   const onSubmit = (values: SchoolClassFormValues) => {
+    const sections = buildSectionsPayload(values.selectedSections);
     const payload = {
       nameEn: values.nameEn.trim(),
       nameAr: values.nameAr.trim(),
@@ -199,12 +256,13 @@ export default function AdminSchoolClassesPage() {
       descriptionAr: values.descriptionAr?.trim() || undefined,
       sortOrder: Number(values.sortOrder),
       isActive: values.isActive,
+      ...(sections.length > 0 ? { sections } : {}),
     };
 
     if (editingItem) {
       updateMutation.mutate({ id: editingItem.id, payload });
     } else {
-      createMutation.mutate(payload);
+      createMutation.mutate(payload as CreateSchoolClassPayload);
     }
   };
 
@@ -476,6 +534,63 @@ export default function AdminSchoolClassesPage() {
                   {fieldError("sortOrder") && (
                     <p className="text-xs text-destructive" role="alert">
                       {fieldError("sortOrder")}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>{t("sectionsLabel")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("sectionsHint")}</p>
+                  {editingItem && assignedSectionNames.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-xs text-muted-foreground w-full">
+                        {t("existingSections")}:
+                      </span>
+                      {assignedSectionNames.map((name) => (
+                        <span
+                          key={name}
+                          className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {SECTION_PRESETS.map((preset) => {
+                      const isAssigned = assignedSectionSet.has(
+                        normalizeSectionName(preset.nameEn)
+                      );
+                      const isSelected = selectedSections.includes(preset.nameEn);
+
+                      return (
+                        <button
+                          key={preset.nameEn}
+                          type="button"
+                          disabled={isAssigned}
+                          title={
+                            isAssigned ? t("sectionAlreadyAssigned") : undefined
+                          }
+                          onClick={() => toggleSection(preset.nameEn)}
+                          className={cn(
+                            "inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-sm font-medium transition-colors",
+                            isAssigned &&
+                              "cursor-not-allowed border-muted bg-muted text-muted-foreground opacity-60",
+                            !isAssigned &&
+                              isSelected &&
+                              "border-primary bg-primary text-primary-foreground",
+                            !isAssigned &&
+                              !isSelected &&
+                              "border-input bg-background hover:bg-muted/50"
+                          )}
+                        >
+                          {pickLocalized(locale, preset.nameEn, preset.nameAr)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {fieldError("selectedSections") && (
+                    <p className="text-xs text-destructive" role="alert">
+                      {fieldError("selectedSections")}
                     </p>
                   )}
                 </div>

@@ -31,6 +31,11 @@ public class ApiExceptionMiddleware(RequestDelegate next, ILogger<ApiExceptionMi
             logger.LogWarning("Auth error: {ErrorCode}", ex.ErrorCode);
             await WriteAuthErrorAsync(context, HttpStatusCode.Unauthorized, ex.ErrorCode, ex.TranslationKey);
         }
+        catch (ConflictException ex)
+        {
+            logger.LogWarning("Conflict: {ErrorCode}", ex.ErrorCode);
+            await WriteConflictErrorAsync(context, ex);
+        }
         catch (KeyNotFoundException ex)
         {
             logger.LogWarning(ex, "Resource not found");
@@ -47,6 +52,26 @@ public class ApiExceptionMiddleware(RequestDelegate next, ILogger<ApiExceptionMi
             var (errorCode, translationKey) = AuthErrorResponseWriter.MapUnauthorizedMessage(ex.Message);
             await WriteAuthErrorAsync(context, HttpStatusCode.Unauthorized, errorCode, translationKey);
         }
+    }
+
+    private static async Task WriteConflictErrorAsync(HttpContext context, ConflictException ex)
+    {
+        if (context.Response.HasStarted) throw new InvalidOperationException("Response already started.");
+
+        context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+        context.Response.ContentType = "application/json";
+
+        var body = new
+        {
+            success = false,
+            errorCode = ex.ErrorCode,
+            translationKey = ex.TranslationKey,
+            messageEn = ex.MessageEn,
+            messageAr = ex.MessageAr,
+            message = ex.MessageEn
+        };
+
+        await context.Response.WriteAsync(JsonSerializer.Serialize(body, JsonOptions));
     }
 
     private static async Task WriteAuthErrorAsync(

@@ -1,5 +1,7 @@
 using FluentValidation;
 using MediatR;
+using SchoolCom.Application.Common;
+using SchoolCom.Application.Common.Exceptions;
 using SchoolCom.Application.Common.Interfaces;
 
 namespace SchoolCom.Application.Features.Sections.Commands.UpdateSection;
@@ -36,6 +38,16 @@ public class UpdateSectionCommandHandler(
 
         var entity = await repo.GetByIdForUpdateAsync(tenantId, request.Id, ct)
             ?? throw new KeyNotFoundException("Section not found");
+
+        if (await repo.ClassSectionExistsAsync(
+                tenantId, entity.SchoolClassId, request.NameEn, excludeSectionId: entity.Id, ct))
+        {
+            throw new ConflictException(
+                AcademicErrorCodes.ClassSectionDuplicate,
+                AcademicErrorMessages.ClassSectionDuplicateEn,
+                AcademicErrorMessages.ClassSectionDuplicateAr,
+                AcademicTranslationKeys.ClassSectionDuplicate);
+        }
 
         entity.NameEn = request.NameEn.Trim();
         entity.NameAr = request.NameAr.Trim();

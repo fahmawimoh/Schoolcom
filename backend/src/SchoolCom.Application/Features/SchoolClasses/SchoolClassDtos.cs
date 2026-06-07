@@ -19,13 +19,18 @@ public record SchoolClassListResult(
     int PageSize,
     int TotalPages);
 
+public record SchoolClassSectionInput(
+    string NameEn,
+    string NameAr);
+
 public record CreateSchoolClassRequest(
     string NameEn,
     string NameAr,
     string? DescriptionEn,
     string? DescriptionAr,
     int SortOrder,
-    bool IsActive = true);
+    bool IsActive = true,
+    IReadOnlyList<SchoolClassSectionInput>? Sections = null);
 
 public record UpdateSchoolClassRequest(
     string NameEn,
@@ -33,4 +38,5 @@ public record UpdateSchoolClassRequest(
     string? DescriptionEn,
     string? DescriptionAr,
     int SortOrder,
-    bool IsActive);
+    bool IsActive,
+    IReadOnlyList<SchoolClassSectionInput>? Sections = null);

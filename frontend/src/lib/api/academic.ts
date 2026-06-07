@@ -32,6 +32,11 @@ export interface SchoolClassListResponse {
   totalPages: number;
 }
 
+export interface SchoolClassSectionInput {
+  nameEn: string;
+  nameAr: string;
+}
+
 export interface CreateSchoolClassPayload {
   nameEn: string;
   nameAr: string;
@@ -39,6 +44,7 @@ export interface CreateSchoolClassPayload {
   descriptionAr?: string;
   sortOrder: number;
   isActive?: boolean;
+  sections?: SchoolClassSectionInput[];
 }
 
 export interface UpdateSchoolClassPayload {
@@ -48,6 +54,7 @@ export interface UpdateSchoolClassPayload {
   descriptionAr?: string;
   sortOrder: number;
   isActive: boolean;
+  sections?: SchoolClassSectionInput[];
 }
 
 export const schoolClassesApi = {

@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using SchoolCom.Application.Common.Interfaces;
+using SchoolCom.Domain.Entities;
 
 namespace SchoolCom.Application.Features.SchoolClasses.Commands.UpdateSchoolClass;
 
@@ -11,7 +12,8 @@ public record UpdateSchoolClassCommand(
     string? DescriptionEn,
     string? DescriptionAr,
     int SortOrder,
-    bool IsActive) : IRequest<SchoolClassDto>;
+    bool IsActive,
+    IReadOnlyList<SchoolClassSectionInput>? Sections = null) : IRequest<SchoolClassDto>;
 
 public class UpdateSchoolClassCommandValidator : AbstractValidator<UpdateSchoolClassCommand>
 {
@@ -23,6 +25,11 @@ public class UpdateSchoolClassCommandValidator : AbstractValidator<UpdateSchoolC
         RuleFor(x => x.DescriptionEn).MaximumLength(500);
         RuleFor(x => x.DescriptionAr).MaximumLength(500);
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
+        RuleForEach(x => x.Sections).ChildRules(section =>
+        {
+            section.RuleFor(s => s.NameEn).NotEmpty().MaximumLength(100);
+            section.RuleFor(s => s.NameAr).NotEmpty().MaximumLength(100);
+        });
     }
 }
 
@@ -36,8 +43,17 @@ public class UpdateSchoolClassCommandHandler(
         var tenantId = currentUser.TenantId
             ?? throw new UnauthorizedAccessException("Tenant not found");
 
-        var entity = await repo.GetByIdForUpdateAsync(tenantId, request.Id, ct)
+        var entity = await repo.GetByIdWithSectionsForUpdateAsync(tenantId, request.Id, ct)
             ?? throw new KeyNotFoundException("School class not found");
+
+        SchoolClassSectionValidator.EnsureNoDuplicateNamesInRequest(request.Sections);
+
+        if (request.Sections is { Count: > 0 })
+        {
+            SchoolClassSectionValidator.EnsureNoDuplicateAgainstExisting(
+                request.Sections,
+                entity.Sections.Select(s => s.NameEn));
+        }
 
         entity.NameEn = request.NameEn.Trim();
         entity.NameAr = request.NameAr.Trim();
@@ -45,6 +61,21 @@ public class UpdateSchoolClassCommandHandler(
         entity.DescriptionAr = string.IsNullOrWhiteSpace(request.DescriptionAr) ? null : request.DescriptionAr.Trim();
         entity.SortOrder = request.SortOrder;
         entity.IsActive = request.IsActive;
+
+        if (request.Sections is { Count: > 0 })
+        {
+            foreach (var section in request.Sections)
+            {
+                entity.Sections.Add(new Section
+                {
+                    TenantId = tenantId,
+                    SchoolClassId = entity.Id,
+                    NameEn = section.NameEn.Trim(),
+                    NameAr = section.NameAr.Trim(),
+                    IsActive = true
+                });
+            }
+        }
 
         await repo.SaveChangesAsync(ct);
         await audit.LogAsync("Update", "SchoolClass", entity.Id, ct: ct);

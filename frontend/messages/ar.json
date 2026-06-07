@@ -197,11 +197,18 @@
     "pageInfo": "صفحة {page} من {totalPages}",
     "previous": "السابق",
     "next": "التالي",
+    "sectionsLabel": "الشعب",
+    "sectionsHint": "اختر شعبة واحدة أو أكثر لهذا الصف الدراسي.",
+    "selectSections": "اختر الشعب",
+    "sectionAlreadyAssigned": "هذه الشعبة مُعيَّنة مسبقاً لهذا الصف",
+    "existingSections": "الشعب الحالية",
     "validation": {
       "fixErrors": "يرجى تصحيح الحقول المميزة قبل الحفظ.",
       "nameEnRequired": "الاسم بالإنجليزية مطلوب",
       "nameArRequired": "الاسم بالعربية مطلوب",
-      "sortOrderInvalid": "يجب أن يكون ترتيب العرض صفراً أو أكبر"
+      "sortOrderInvalid": "يجب أن يكون ترتيب العرض صفراً أو أكبر",
+      "sectionDuplicate": "لا يمكن اختيار نفس الشعبة أكثر من مرة",
+      "classSectionDuplicate": "هذا الصف مع الشعبة موجود مسبقاً"
     },
     "saveFailed": "تعذر حفظ الصف الدراسي. يرجى المحاولة مرة أخرى."
   },
@@ -239,11 +246,13 @@
     "pageInfo": "صفحة {page} من {totalPages}",
     "previous": "السابق",
     "next": "التالي",
+    "sectionAlreadyAssigned": "هذه الشعبة مُعيَّنة مسبقاً لهذا الصف",
     "validation": {
       "fixErrors": "يرجى تصحيح الحقول المميزة قبل الحفظ.",
       "schoolClassRequired": "يرجى اختيار الصف الدراسي",
       "nameEnRequired": "الاسم بالإنجليزية مطلوب",
-      "nameArRequired": "الاسم بالعربية مطلوب"
+      "nameArRequired": "الاسم بالعربية مطلوب",
+      "classSectionDuplicate": "هذا الصف مع الشعبة موجود مسبقاً"
     },
     "saveFailed": "تعذر حفظ الشعبة. يرجى المحاولة مرة أخرى."
   },

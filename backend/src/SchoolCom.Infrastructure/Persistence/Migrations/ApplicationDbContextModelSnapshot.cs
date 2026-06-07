@@ -718,7 +718,8 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "IsActive");
 
                     b.HasIndex("TenantId", "SchoolClassId", "NameEn")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UQ_class_sections_school_class_id_section_name");
 
                     b.ToTable("sections", (string)null);
                 });

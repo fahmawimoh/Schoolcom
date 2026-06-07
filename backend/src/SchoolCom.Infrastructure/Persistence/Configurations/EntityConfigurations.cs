@@ -197,7 +197,9 @@ public class SectionConfiguration : IEntityTypeConfiguration<Section>
         builder.Property(x => x.NameAr).IsRequired().HasMaxLength(100);
         builder.Property(x => x.DescriptionEn).HasMaxLength(500);
         builder.Property(x => x.DescriptionAr).HasMaxLength(500);
-        builder.HasIndex(x => new { x.TenantId, x.SchoolClassId, x.NameEn }).IsUnique();
+        builder.HasIndex(x => new { x.TenantId, x.SchoolClassId, x.NameEn })
+            .IsUnique()
+            .HasDatabaseName("UQ_class_sections_school_class_id_section_name");
         builder.HasIndex(x => new { x.TenantId, x.IsActive });
         builder.HasIndex(x => x.SchoolClassId);
         builder.HasOne(x => x.SchoolClass)
