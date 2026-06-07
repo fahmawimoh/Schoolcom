@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "SchoolCom (schoolcom)",
+      "Group": "SchoolCom",
+      "Host": "localhost",
+      "Port": 5400,
+      "MaintenanceDB": "schoolcom",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "SchoolCom PostgreSQL — use password from backend/.env"
+    }
+  }
+}

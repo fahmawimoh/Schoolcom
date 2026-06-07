@@ -1,0 +1,82 @@
+{
+  "common": {
+    "appName": "سكول كوم",
+    "tagline": "تواصل آمن بين أولياء الأمور والمعلمين",
+    "loading": "جاري التحميل...",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "back": "رجوع",
+    "error": "حدث خطأ ما",
+    "success": "تم بنجاح"
+  },
+  "auth": {
+    "welcomeBack": "مرحباً بعودتك",
+    "signInSubtitle": "سجّل الدخول إلى حسابك للمتابعة",
+    "emailTab": "البريد الإلكتروني",
+    "phoneTab": "الهاتف",
+    "email": "البريد الإلكتروني",
+    "emailPlaceholder": "you@school.com",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "أدخل كلمة المرور",
+    "phone": "رقم الهاتف",
+    "phonePlaceholder": "+966 5XX XXX XXXX",
+    "otp": "رمز التحقق",
+    "otpPlaceholder": "أدخل الرمز المكون من 6 أرقام",
+    "sendOtp": "إرسال رمز التحقق",
+    "resendOtp": "إعادة إرسال الرمز",
+    "resendIn": "إعادة الإرسال خلال {seconds} ث",
+    "signIn": "تسجيل الدخول",
+    "verifyAndSignIn": "تحقق وسجّل الدخول",
+    "forgotPassword": "نسيت كلمة المرور؟",
+    "rememberMe": "تذكرني",
+    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+    "invalidOtp": "رمز التحقق غير صحيح أو منتهي الصلاحية",
+    "otpSent": "تم إرسال رمز التحقق إلى هاتفك",
+    "secureLogin": "اتصال آمن ومشفر",
+    "demoAdminLogin": "دخول كمسؤول (تجريبي)",
+    "demoHint": "تجريبي: admin@demo.school / Admin@123456"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "messages": "الرسائل",
+    "moderation": "المراجعة",
+    "whatsapp": "واتساب",
+    "students": "الطلاب",
+    "reports": "التقارير",
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج"
+  },
+  "dashboard": {
+    "welcome": "مرحباً، {name}",
+    "stats": {
+      "pendingMessages": "رسائل قيد المراجعة",
+      "activeConversations": "محادثات نشطة",
+      "totalStudents": "إجمالي الطلاب",
+      "notifications": "الإشعارات"
+    },
+    "quickActions": "إجراءات سريعة",
+    "recentActivity": "النشاط الأخير"
+  },
+  "whatsapp": {
+    "title": "التواصل عبر واتساب",
+    "subtitle": "قناة خاصة بالمسؤولين للتواصل مع أولياء الأمور عبر واتساب للأعمال",
+    "adminOnly": "هذه الميزة متاحة لمسؤولي المدرسة فقط",
+    "connected": "متصل",
+    "disconnected": "غير متصل",
+    "configure": "إعداد التكامل",
+    "sendMessage": "إرسال رسالة",
+    "recipientPhone": "رقم المستلم",
+    "messageBody": "الرسالة",
+    "messagePlaceholder": "اكتب رسالتك...",
+    "send": "إرسال عبر واتساب",
+    "sent": "تم إرسال الرسالة بنجاح",
+    "conversations": "المحادثات الأخيرة",
+    "noConversations": "لا توجد محادثات واتساب بعد"
+  },
+  "roles": {
+    "SuperAdmin": "المسؤول الأعلى",
+    "SchoolAdmin": "مسؤول المدرسة",
+    "Teacher": "معلم",
+    "Parent": "ولي أمر"
+  }
+}

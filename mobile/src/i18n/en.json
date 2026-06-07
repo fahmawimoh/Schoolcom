@@ -1,0 +1,82 @@
+{
+  "common": {
+    "appName": "SchoolCom",
+    "tagline": "Secure Parent-Teacher Communication",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "error": "Something went wrong",
+    "success": "Success"
+  },
+  "auth": {
+    "welcomeBack": "Welcome back",
+    "signInSubtitle": "Sign in to your account to continue",
+    "emailTab": "Email",
+    "phoneTab": "Phone",
+    "email": "Email address",
+    "emailPlaceholder": "you@school.com",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "phone": "Phone number",
+    "phonePlaceholder": "+966 5XX XXX XXXX",
+    "otp": "Verification code",
+    "otpPlaceholder": "Enter 6-digit code",
+    "sendOtp": "Send verification code",
+    "resendOtp": "Resend code",
+    "resendIn": "Resend in {seconds}s",
+    "signIn": "Sign in",
+    "verifyAndSignIn": "Verify & sign in",
+    "forgotPassword": "Forgot password?",
+    "rememberMe": "Remember me",
+    "invalidCredentials": "Invalid email or password",
+    "invalidOtp": "Invalid or expired verification code",
+    "otpSent": "Verification code sent to your phone",
+    "secureLogin": "Secure, encrypted connection",
+    "demoAdminLogin": "Login as Admin (demo)",
+    "demoHint": "Demo: admin@demo.school / Admin@123456"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "messages": "Messages",
+    "moderation": "Moderation",
+    "whatsapp": "WhatsApp",
+    "students": "Students",
+    "reports": "Reports",
+    "settings": "Settings",
+    "logout": "Sign out"
+  },
+  "dashboard": {
+    "welcome": "Welcome, {name}",
+    "stats": {
+      "pendingMessages": "Pending Messages",
+      "activeConversations": "Active Conversations",
+      "totalStudents": "Total Students",
+      "notifications": "Notifications"
+    },
+    "quickActions": "Quick Actions",
+    "recentActivity": "Recent Activity"
+  },
+  "whatsapp": {
+    "title": "WhatsApp Communication",
+    "subtitle": "Admin-only channel for parent outreach via WhatsApp Business",
+    "adminOnly": "This feature is restricted to school administrators",
+    "connected": "Connected",
+    "disconnected": "Not connected",
+    "configure": "Configure integration",
+    "sendMessage": "Send message",
+    "recipientPhone": "Recipient phone",
+    "messageBody": "Message",
+    "messagePlaceholder": "Type your message...",
+    "send": "Send via WhatsApp",
+    "sent": "Message sent successfully",
+    "conversations": "Recent conversations",
+    "noConversations": "No WhatsApp conversations yet"
+  },
+  "roles": {
+    "SuperAdmin": "Super Admin",
+    "SchoolAdmin": "School Admin",
+    "Teacher": "Teacher",
+    "Parent": "Parent"
+  }
+}
