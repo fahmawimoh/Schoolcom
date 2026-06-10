@@ -24,7 +24,6 @@ public class SectionsController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> GetSections(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
-        [FromQuery] Guid? schoolClassId = null,
         [FromQuery] string? search = null,
         [FromQuery] bool? isActive = null,
         [FromQuery] string? sortBy = null,
@@ -32,7 +31,7 @@ public class SectionsController(IMediator mediator) : ControllerBase
         CancellationToken ct = default)
     {
         var result = await mediator.Send(
-            new GetSectionsQuery(page, pageSize, schoolClassId, search, isActive, sortBy, sortDesc), ct);
+            new GetSectionsQuery(page, pageSize, search, isActive, sortBy, sortDesc), ct);
         return Ok(new ApiResponse<SectionListResult>(result));
     }
 
@@ -40,7 +39,7 @@ public class SectionsController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> GetSectionsBySchoolClass(Guid schoolClassId, CancellationToken ct)
     {
         var result = await mediator.Send(new GetSectionsBySchoolClassQuery(schoolClassId), ct);
-        return Ok(new ApiResponse<IReadOnlyList<SchoolClassSectionOptionDto>>(result));
+        return Ok(new ApiResponse<IReadOnlyList<ClassSectionOptionDto>>(result));
     }
 
     [HttpGet("{id:guid}")]
@@ -57,7 +56,6 @@ public class SectionsController(IMediator mediator) : ControllerBase
     {
         var result = await mediator.Send(
             new CreateSectionCommand(
-                request.SchoolClassId,
                 request.NameEn,
                 request.NameAr,
                 request.DescriptionEn,

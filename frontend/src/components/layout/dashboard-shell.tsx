@@ -99,6 +99,11 @@ export function DashboardShell({ children, role }: DashboardShellProps) {
           label: t("nav.rooms"),
         },
         {
+          href: `/${locale}/admin/room-assignments`,
+          icon: Building2,
+          label: t("nav.roomAssignments"),
+        },
+        {
           href: `/${locale}/admin/timetable`,
           icon: CalendarClock,
           label: t("nav.timetable"),

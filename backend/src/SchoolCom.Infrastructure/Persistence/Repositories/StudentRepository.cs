@@ -64,12 +64,12 @@ public class StudentRepository(ApplicationDbContext db) : IStudentRepository
             .Select(g => new SchoolClassFilterOptionDto(g.Id, g.NameEn, g.NameAr))
             .ToListAsync(ct);
 
-        var sections = await db.Sections
+        var sections = await db.ClassSections
             .AsNoTracking()
-            .Where(s => s.TenantId == tenantId && s.IsActive)
-            .OrderBy(s => s.SchoolClass.SortOrder)
-            .ThenBy(s => s.NameEn)
-            .Select(s => new SectionFilterOptionDto(s.Id, s.SchoolClassId, s.NameEn, s.NameAr))
+            .Where(cs => cs.TenantId == tenantId && cs.IsActive && cs.Section.IsActive)
+            .OrderBy(cs => cs.SchoolClass.SortOrder)
+            .ThenBy(cs => cs.Section.NameEn)
+            .Select(cs => new SectionFilterOptionDto(cs.SectionId, cs.SchoolClassId, cs.Section.NameEn, cs.Section.NameAr))
             .ToListAsync(ct);
 
         var parents = await db.Users
@@ -123,8 +123,8 @@ public class StudentRepository(ApplicationDbContext db) : IStudentRepository
     }
 
     public Task<bool> SectionBelongsToSchoolClassAsync(Guid tenantId, Guid schoolClassId, Guid sectionId, CancellationToken ct) =>
-        db.Sections.AnyAsync(
-            s => s.TenantId == tenantId && s.SchoolClassId == schoolClassId && s.Id == sectionId,
+        db.ClassSections.AnyAsync(
+            cs => cs.TenantId == tenantId && cs.SchoolClassId == schoolClassId && cs.SectionId == sectionId,
             ct);
 
     public async Task AddAsync(Student student, CancellationToken ct) =>

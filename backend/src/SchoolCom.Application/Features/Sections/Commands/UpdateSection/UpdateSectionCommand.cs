@@ -39,14 +39,13 @@ public class UpdateSectionCommandHandler(
         var entity = await repo.GetByIdForUpdateAsync(tenantId, request.Id, ct)
             ?? throw new KeyNotFoundException("Section not found");
 
-        if (await repo.ClassSectionExistsAsync(
-                tenantId, entity.SchoolClassId, request.NameEn, excludeSectionId: entity.Id, ct))
+        if (await repo.NameExistsAsync(tenantId, request.NameEn, excludeSectionId: entity.Id, ct))
         {
             throw new ConflictException(
-                AcademicErrorCodes.ClassSectionDuplicate,
-                AcademicErrorMessages.ClassSectionDuplicateEn,
-                AcademicErrorMessages.ClassSectionDuplicateAr,
-                AcademicTranslationKeys.ClassSectionDuplicate);
+                AcademicErrorCodes.SectionNameDuplicate,
+                AcademicErrorMessages.SectionNameDuplicateEn,
+                AcademicErrorMessages.SectionNameDuplicateAr,
+                AcademicTranslationKeys.SectionNameDuplicate);
         }
 
         entity.NameEn = request.NameEn.Trim();
@@ -63,15 +62,12 @@ public class UpdateSectionCommandHandler(
 
         return new SectionDto(
             updated.Id,
-            updated.SchoolClassId,
-            updated.SchoolClass.NameEn,
-            updated.SchoolClass.NameAr,
             updated.NameEn,
             updated.NameAr,
             updated.DescriptionEn,
             updated.DescriptionAr,
             updated.IsActive,
-            updated.Students.Count,
+            updated.ClassSections.Count,
             updated.CreatedAt);
     }
 }

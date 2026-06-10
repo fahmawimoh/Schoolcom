@@ -205,70 +205,97 @@ public static class DbSeeder
             });
         }
 
-        var sections = new[]
+        var standaloneSections = new[]
         {
             new Section
             {
                 Id = SeedData.SectionAId,
                 TenantId = SeedData.DemoTenantId,
-                SchoolClassId = SeedData.Grade5Id,
-                NameEn = "Section A",
-                NameAr = "الشعبة أ",
-                IsActive = true,
-                HomeroomTeacherUserId = SeedData.TeacherUserId
+                NameEn = "A",
+                NameAr = "أ",
+                IsActive = true
             },
             new Section
             {
                 Id = SeedData.SectionBId,
                 TenantId = SeedData.DemoTenantId,
-                SchoolClassId = SeedData.Grade5Id,
-                NameEn = "Section B",
-                NameAr = "الشعبة ب",
-                IsActive = true,
-                HomeroomTeacherUserId = SeedData.TeacherUserId
+                NameEn = "B",
+                NameAr = "ب",
+                IsActive = true
             },
             new Section
             {
                 Id = SeedData.SectionCId,
                 TenantId = SeedData.DemoTenantId,
-                SchoolClassId = SeedData.Grade5Id,
-                NameEn = "Section C",
-                NameAr = "الشعبة ج",
-                IsActive = true,
-                HomeroomTeacherUserId = SeedData.TeacherUserId
-            },
-            new Section
-            {
-                Id = SeedData.ClassroomGrade4AId,
-                TenantId = SeedData.DemoTenantId,
-                SchoolClassId = SeedData.Grade4Id,
-                NameEn = "Section A",
-                NameAr = "الشعبة أ",
-                IsActive = true,
-                HomeroomTeacherUserId = SeedData.TeacherUserId
-            },
-            new Section
-            {
-                Id = SeedData.ClassroomGrade6AId,
-                TenantId = SeedData.DemoTenantId,
-                SchoolClassId = SeedData.Grade6Id,
-                NameEn = "Section A",
-                NameAr = "الشعبة أ",
-                IsActive = true,
-                HomeroomTeacherUserId = SeedData.TeacherUserId
+                NameEn = "C",
+                NameAr = "ج",
+                IsActive = true
             }
         };
 
-        foreach (var section in sections)
+        foreach (var section in standaloneSections)
         {
-            var exists = await db.Sections.AnyAsync(s =>
-                s.SchoolClassId == section.SchoolClassId &&
-                (s.NameEn == section.NameEn || s.NameEn == ToLegacySectionName(section.NameEn)));
-            if (!exists)
+            if (!await db.Sections.AnyAsync(s =>
+                    s.Id == section.Id ||
+                    (s.TenantId == section.TenantId && s.NameEn == section.NameEn)))
                 db.Sections.Add(section);
         }
 
         await db.SaveChangesAsync();
+
+        var classSectionLinks = new[]
+        {
+            (SeedData.Grade5Id, SeedData.SectionAId),
+            (SeedData.Grade5Id, SeedData.SectionBId),
+            (SeedData.Grade5Id, SeedData.SectionCId),
+            (SeedData.Grade4Id, SeedData.SectionAId),
+            (SeedData.Grade6Id, SeedData.SectionAId)
+        };
+
+        foreach (var (schoolClassId, sectionId) in classSectionLinks)
+        {
+            var resolvedSectionId = await ResolveSeedSectionIdAsync(db, sectionId);
+            if (resolvedSectionId is null) continue;
+
+            if (!await db.ClassSections.AnyAsync(cs =>
+                    cs.TenantId == SeedData.DemoTenantId &&
+                    cs.SchoolClassId == schoolClassId &&
+                    cs.SectionId == resolvedSectionId.Value))
+            {
+                db.ClassSections.Add(new ClassSection
+                {
+                    TenantId = SeedData.DemoTenantId,
+                    SchoolClassId = schoolClassId,
+                    SectionId = resolvedSectionId.Value,
+                    IsActive = true
+                });
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<Guid?> ResolveSeedSectionIdAsync(
+        ApplicationDbContext db, Guid seedSectionId)
+    {
+        if (await db.Sections.AnyAsync(s => s.Id == seedSectionId))
+            return seedSectionId;
+
+        var shortName = seedSectionId switch
+        {
+            var id when id == SeedData.SectionAId => "A",
+            var id when id == SeedData.SectionBId => "B",
+            var id when id == SeedData.SectionCId => "C",
+            _ => null
+        };
+
+        if (shortName is null) return null;
+
+        return await db.Sections
+            .Where(s => s.TenantId == SeedData.DemoTenantId &&
+                        (s.NameEn == shortName || s.NameEn == $"Section {shortName}"))
+            .Select(s => (Guid?)s.Id)
+            .FirstOrDefaultAsync();
     }
 
     private static async Task<Guid?> GetSectionIdAsync(
@@ -276,9 +303,9 @@ public static class DbSeeder
     {
         foreach (var nameEn in nameCandidates)
         {
-            var id = await db.Sections
-                .Where(s => s.SchoolClassId == schoolClassId && s.NameEn == nameEn)
-                .Select(s => (Guid?)s.Id)
+            var id = await db.ClassSections
+                .Where(cs => cs.SchoolClassId == schoolClassId && cs.Section.NameEn == nameEn)
+                .Select(cs => (Guid?)cs.SectionId)
                 .FirstOrDefaultAsync();
             if (id.HasValue) return id;
         }
@@ -302,65 +329,8 @@ public static class DbSeeder
             _ => null
         };
 
-    private static async Task ConsolidateLegacySectionsAsync(ApplicationDbContext db)
-    {
-        var classIds = await db.Sections
-            .Select(s => s.SchoolClassId)
-            .Distinct()
-            .ToListAsync();
-
-        foreach (var classId in classIds)
-        {
-            foreach (var (legacy, canonical) in SectionNamePairs)
-            {
-                var sections = await db.Sections
-                    .Where(s => s.SchoolClassId == classId && (s.NameEn == legacy || s.NameEn == canonical))
-                    .ToListAsync();
-
-                if (sections.Count == 0) continue;
-
-                var legacySection = sections.FirstOrDefault(s => s.NameEn == legacy);
-                var canonicalSection = sections.FirstOrDefault(s => s.NameEn == canonical);
-
-                if (legacySection is not null && canonicalSection is not null)
-                {
-                    var canonicalInUse = await SectionIsInUseAsync(db, canonicalSection.Id);
-                    var legacyInUse = await SectionIsInUseAsync(db, legacySection.Id);
-
-                    if (!canonicalInUse && legacyInUse)
-                    {
-                        db.Sections.Remove(canonicalSection);
-                        await db.SaveChangesAsync();
-                        legacySection.NameEn = canonical;
-                        await db.SaveChangesAsync();
-                    }
-                    else if (canonicalInUse && !legacyInUse)
-                    {
-                        db.Sections.Remove(legacySection);
-                        await db.SaveChangesAsync();
-                    }
-                    else if (!canonicalInUse && !legacyInUse)
-                    {
-                        db.Sections.Remove(canonicalSection);
-                        await db.SaveChangesAsync();
-                        legacySection.NameEn = canonical;
-                        await db.SaveChangesAsync();
-                    }
-                    else if (canonicalInUse && legacyInUse)
-                    {
-                        await ReassignSectionReferencesAsync(db, legacySection.Id, canonicalSection.Id);
-                        db.Sections.Remove(legacySection);
-                        await db.SaveChangesAsync();
-                    }
-                }
-                else if (legacySection is not null)
-                {
-                    legacySection.NameEn = canonical;
-                    await db.SaveChangesAsync();
-                }
-            }
-        }
-    }
+    private static Task ConsolidateLegacySectionsAsync(ApplicationDbContext db) =>
+        Task.CompletedTask;
 
     private static async Task ReassignSectionReferencesAsync(
         ApplicationDbContext db, Guid fromSectionId, Guid toSectionId)
@@ -500,6 +470,9 @@ public static class DbSeeder
         var existingNumbers = await db.Students
             .Select(s => s.StudentNumber)
             .ToListAsync();
+        var existingIds = await db.Students
+            .Select(s => s.Id)
+            .ToListAsync();
 
         var samples = new[]
         {
@@ -517,7 +490,7 @@ public static class DbSeeder
 
         foreach (var s in samples)
         {
-            if (existingNumbers.Contains(s.Number)) continue;
+            if (existingNumbers.Contains(s.Number) || existingIds.Contains(s.Id)) continue;
 
             db.Students.Add(new Student
             {

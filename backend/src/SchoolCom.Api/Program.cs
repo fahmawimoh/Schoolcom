@@ -170,7 +170,23 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-await DatabaseInitializer.InitializeAsync(app.Services);
+var resetDatabaseOnly =
+    args.Contains("--reset-database-only", StringComparer.OrdinalIgnoreCase);
+var resetDatabase =
+    resetDatabaseOnly ||
+    args.Contains("--reset-database", StringComparer.OrdinalIgnoreCase) ||
+    string.Equals(
+        Environment.GetEnvironmentVariable("RESET_DATABASE"),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
+
+if (resetDatabase)
+    await DatabaseInitializer.ResetAndSeedAsync(app.Services);
+else
+    await DatabaseInitializer.InitializeAsync(app.Services);
+
+if (resetDatabaseOnly)
+    return;
 
 if (app.Environment.IsDevelopment())
 {

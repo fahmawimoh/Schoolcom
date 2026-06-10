@@ -47,7 +47,9 @@ public class RoomsController(IMediator mediator) : ControllerBase
         CancellationToken ct)
     {
         var result = await mediator.Send(
-            new CreateRoomCommand(request.NameEn, request.NameAr, request.Code, request.Capacity, request.IsActive), ct);
+            new CreateRoomCommand(
+                request.NameEn, request.NameAr, request.Capacity, request.IsActive,
+                request.SchoolClassId, request.SectionId), ct);
         return CreatedAtAction(nameof(GetRoom), new { id = result.Id }, new ApiResponse<RoomDto>(result));
     }
 
@@ -58,7 +60,9 @@ public class RoomsController(IMediator mediator) : ControllerBase
         CancellationToken ct)
     {
         var result = await mediator.Send(
-            new UpdateRoomCommand(id, request.NameEn, request.NameAr, request.Code, request.Capacity, request.IsActive), ct);
+            new UpdateRoomCommand(
+                id, request.NameEn, request.NameAr, request.Capacity, request.IsActive,
+                request.SchoolClassId, request.SectionId), ct);
         return Ok(new ApiResponse<RoomDto>(result));
     }
 

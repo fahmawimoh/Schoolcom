@@ -19,6 +19,10 @@ import {
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
+  DeleteConfirmDialog,
+  type DeleteConfirmState,
+} from "@/components/admin/delete-confirm-dialog";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -30,17 +34,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getLocalizedApiErrorMessage } from "@/lib/api/error-messages";
 import {
+  applyDeleteToListCache,
+  refreshListQueries,
+} from "@/lib/query/list-delete";
+import {
   type CreateSchoolClassPayload,
   type SchoolClass,
-  type SchoolClassSectionInput,
   type UpdateSchoolClassPayload,
   schoolClassesApi,
   sectionsApi,
 } from "@/lib/api/academic";
-import {
-  SECTION_PRESETS,
-  normalizeSectionName,
-} from "@/lib/academic/section-presets";
 import {
   createSchoolClassFormSchema,
   type SchoolClassFormValues,
@@ -67,7 +70,7 @@ export default function AdminSchoolClassesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SchoolClass | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [assignedSectionNames, setAssignedSectionNames] = useState<string[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -97,9 +100,16 @@ export default function AdminSchoolClassesPage() {
         nameArRequired: tValidation("nameArRequired"),
         sortOrderInvalid: tValidation("sortOrderInvalid"),
         sectionDuplicate: tValidation("sectionDuplicate"),
+        sectionsRequired: tValidation("sectionsRequired"),
       }),
     [tValidation]
   );
+
+  const { data: sectionOptions } = useQuery({
+    queryKey: ["section-options"],
+    queryFn: () => sectionsApi.list({ page: 1, pageSize: 100, isActive: true }),
+    enabled: isAdmin && dialogOpen,
+  });
 
   const getSaveErrorMessage = useCallback(
     (err: unknown, fallback: string) =>
@@ -119,14 +129,15 @@ export default function AdminSchoolClassesPage() {
       descriptionAr: "",
       sortOrder: "0",
       isActive: true,
-      selectedSections: [],
+      sectionId: "",
     },
   });
 
-  const selectedSections = form.watch("selectedSections");
 
-  const fieldError = (name: FieldPath<SchoolClassFormValues>) =>
-    form.formState.errors[name]?.message;
+  const fieldError = (name: FieldPath<SchoolClassFormValues>) => {
+    const err = form.formState.errors[name as keyof typeof form.formState.errors];
+    return err && "message" in err ? String(err.message) : undefined;
+  };
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["school-classes"] });
@@ -160,14 +171,25 @@ export default function AdminSchoolClassesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => schoolClassesApi.delete(id),
-    onSuccess: () => {
-      toast.success(t("deleted"));
+    onSuccess: async (_result, deletedId) => {
+      applyDeleteToListCache<SchoolClass>(
+        queryClient,
+        ["school-classes"],
+        deletedId
+      );
       setDeletingId(null);
+      setDeleteConfirm(null);
+      toast.success(t("deleted"));
       if (data?.items.length === 1 && page > 1) setPage((p) => p - 1);
-      invalidate();
+      await refreshListQueries(queryClient, ["school-classes"], [
+        ["section-options"],
+        ["school-classes-options"],
+      ]);
     },
-    onError: (err: unknown) =>
-      toast.error(getSaveErrorMessage(err, t("saveFailed"))),
+    onError: (err: unknown) => {
+      setDeletingId(null);
+      toast.error(getSaveErrorMessage(err, t("deleteFailed")));
+    },
   });
 
   useEffect(() => {
@@ -178,14 +200,8 @@ export default function AdminSchoolClassesPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const loadAssignedSections = useCallback(async (schoolClassId: string) => {
-    const sections = await sectionsApi.getBySchoolClass(schoolClassId);
-    setAssignedSectionNames(sections.map((s) => s.sectionNameEn));
-  }, []);
-
   const openCreate = () => {
     setEditingItem(null);
-    setAssignedSectionNames([]);
     form.reset({
       nameEn: "",
       nameAr: "",
@@ -193,14 +209,13 @@ export default function AdminSchoolClassesPage() {
       descriptionAr: "",
       sortOrder: "0",
       isActive: true,
-      selectedSections: [],
+      sectionId: "",
     });
     setDialogOpen(true);
   };
 
   const openEdit = async (item: SchoolClass) => {
     setEditingItem(item);
-    setAssignedSectionNames([]);
     form.reset({
       nameEn: item.nameEn,
       nameAr: item.nameAr,
@@ -208,47 +223,29 @@ export default function AdminSchoolClassesPage() {
       descriptionAr: item.descriptionAr ?? "",
       sortOrder: String(item.sortOrder),
       isActive: item.isActive,
-      selectedSections: [],
+      sectionId: "",
     });
     setDialogOpen(true);
     try {
-      await loadAssignedSections(item.id);
+      const links = await sectionsApi.getBySchoolClass(item.id);
+      form.setValue("sectionId", links[0]?.sectionId ?? "", {
+        shouldValidate: true,
+      });
     } catch {
-      setAssignedSectionNames([]);
+      form.setValue("sectionId", "", { shouldValidate: true });
     }
   };
 
-  const assignedSectionSet = useMemo(
-    () => new Set(assignedSectionNames.map(normalizeSectionName)),
-    [assignedSectionNames]
-  );
-
-  const buildSectionsPayload = (
-    keys: string[]
-  ): SchoolClassSectionInput[] =>
-    SECTION_PRESETS.filter((preset) => keys.includes(preset.nameEn)).map(
-      (preset) => ({
-        nameEn: preset.nameEn,
-        nameAr: preset.nameAr,
-      })
-    );
-
-  const toggleSection = (nameEn: string) => {
-    if (assignedSectionSet.has(normalizeSectionName(nameEn))) {
-      toast.error(t("sectionAlreadyAssigned"));
-      return;
+  const formatSectionNames = (item: SchoolClass) => {
+    if (item.sections?.length) {
+      return item.sections
+        .map((section) => pickLocalized(locale, section.nameEn, section.nameAr))
+        .join(", ");
     }
-
-    const current = form.getValues("selectedSections");
-    const next = current.includes(nameEn)
-      ? current.filter((key) => key !== nameEn)
-      : [...current, nameEn];
-
-    form.setValue("selectedSections", next, { shouldValidate: true });
+    return "—";
   };
 
   const onSubmit = (values: SchoolClassFormValues) => {
-    const sections = buildSectionsPayload(values.selectedSections);
     const payload = {
       nameEn: values.nameEn.trim(),
       nameAr: values.nameAr.trim(),
@@ -256,7 +253,7 @@ export default function AdminSchoolClassesPage() {
       descriptionAr: values.descriptionAr?.trim() || undefined,
       sortOrder: Number(values.sortOrder),
       isActive: values.isActive,
-      ...(sections.length > 0 ? { sections } : {}),
+      sectionIds: [values.sectionId],
     };
 
     if (editingItem) {
@@ -368,7 +365,7 @@ export default function AdminSchoolClassesPage() {
                           {pickLocalized(locale, item.nameEn, item.nameAr)}
                         </td>
                         <td className="p-3">{item.sortOrder}</td>
-                        <td className="p-3">{item.sectionCount}</td>
+                        <td className="p-3">{formatSectionNames(item)}</td>
                         <td className="p-3">{item.studentCount}</td>
                         <td className="p-3">
                           <span
@@ -401,10 +398,10 @@ export default function AdminSchoolClassesPage() {
                                   item.nameEn,
                                   item.nameAr
                                 );
-                                if (window.confirm(t("deleteConfirm", { name }))) {
-                                  setDeletingId(item.id);
-                                  deleteMutation.mutate(item.id);
-                                }
+                                setDeleteConfirm({
+                                  id: item.id,
+                                  description: t("deleteConfirm", { name }),
+                                });
                               }}
                             >
                               {deleteMutation.isPending &&
@@ -538,59 +535,32 @@ export default function AdminSchoolClassesPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>{t("sectionsLabel")}</Label>
-                  <p className="text-xs text-muted-foreground">{t("sectionsHint")}</p>
-                  {editingItem && assignedSectionNames.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      <span className="text-xs text-muted-foreground w-full">
-                        {t("existingSections")}:
-                      </span>
-                      {assignedSectionNames.map((name) => (
-                        <span
-                          key={name}
-                          className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium"
-                        >
-                          {name}
-                        </span>
+                  <Label htmlFor="sectionId">{t("sectionsLabel")}</Label>
+                  {sectionOptions && sectionOptions.items.length > 0 ? (
+                    <select
+                      id="sectionId"
+                      className={cn(
+                        "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm",
+                        fieldClass(!!fieldError("sectionId"))
+                      )}
+                      aria-invalid={!!fieldError("sectionId")}
+                      {...form.register("sectionId")}
+                    >
+                      <option value="">{t("selectSection")}</option>
+                      {sectionOptions.items.map((section) => (
+                        <option key={section.id} value={section.id}>
+                          {pickLocalized(locale, section.nameEn, section.nameAr)}
+                        </option>
                       ))}
-                    </div>
+                    </select>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {t("noSectionsAvailable")}
+                    </p>
                   )}
-                  <div className="flex flex-wrap gap-2">
-                    {SECTION_PRESETS.map((preset) => {
-                      const isAssigned = assignedSectionSet.has(
-                        normalizeSectionName(preset.nameEn)
-                      );
-                      const isSelected = selectedSections.includes(preset.nameEn);
-
-                      return (
-                        <button
-                          key={preset.nameEn}
-                          type="button"
-                          disabled={isAssigned}
-                          title={
-                            isAssigned ? t("sectionAlreadyAssigned") : undefined
-                          }
-                          onClick={() => toggleSection(preset.nameEn)}
-                          className={cn(
-                            "inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-sm font-medium transition-colors",
-                            isAssigned &&
-                              "cursor-not-allowed border-muted bg-muted text-muted-foreground opacity-60",
-                            !isAssigned &&
-                              isSelected &&
-                              "border-primary bg-primary text-primary-foreground",
-                            !isAssigned &&
-                              !isSelected &&
-                              "border-input bg-background hover:bg-muted/50"
-                          )}
-                        >
-                          {pickLocalized(locale, preset.nameEn, preset.nameAr)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {fieldError("selectedSections") && (
+                  {fieldError("sectionId") && (
                     <p className="text-xs text-destructive" role="alert">
-                      {fieldError("selectedSections")}
+                      {fieldError("sectionId")}
                     </p>
                   )}
                 </div>
@@ -633,6 +603,18 @@ export default function AdminSchoolClassesPage() {
           </Card>
         </div>
       )}
+
+      <DeleteConfirmDialog
+        state={deleteConfirm}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteConfirm(null);
+        }}
+        isPending={deleteMutation.isPending}
+        onConfirm={(id) => {
+          setDeletingId(id);
+          deleteMutation.mutate(id);
+        }}
+      />
     </DashboardShell>
   );
 }

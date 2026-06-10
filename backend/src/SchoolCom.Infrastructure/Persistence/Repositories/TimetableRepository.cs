@@ -113,8 +113,8 @@ public class TimetableRepository(ApplicationDbContext db) : ITimetableRepository
         Guid schoolClassId,
         Guid sectionId,
         CancellationToken ct) =>
-        db.Sections.AnyAsync(
-            x => x.TenantId == tenantId && x.Id == sectionId && x.SchoolClassId == schoolClassId,
+        db.ClassSections.AnyAsync(
+            x => x.TenantId == tenantId && x.SchoolClassId == schoolClassId && x.SectionId == sectionId,
             ct);
 
     public Task<bool> TeacherExistsAsync(Guid tenantId, Guid teacherId, CancellationToken ct) =>

@@ -69,6 +69,43 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("SchoolCom.Domain.Entities.ClassSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("SchoolClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchoolClassId");
+
+                    b.HasIndex("SectionId");
+
+                    b.HasIndex("TenantId", "SchoolClassId", "SectionId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_class_sections_school_class_id_section_id");
+
+                    b.ToTable("class_sections", (string)null);
+                });
+
             modelBuilder.Entity("SchoolCom.Domain.Entities.Conversation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -580,11 +617,47 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "Code");
+                    b.HasIndex("TenantId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_rooms_tenant_code");
 
                     b.HasIndex("TenantId", "IsActive");
 
                     b.ToTable("rooms", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolCom.Domain.Entities.RoomAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClassSectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClassSectionId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_room_assignments_class_section_id");
+
+                    b.HasIndex("RoomId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_room_assignments_room_id");
+
+                    b.ToTable("room_assignments", (string)null);
                 });
 
             modelBuilder.Entity("SchoolCom.Domain.Entities.SchoolBranch", b =>
@@ -662,6 +735,10 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "IsActive");
 
+                    b.HasIndex("TenantId", "NameEn")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_school_classes_tenant_name_en");
+
                     b.HasIndex("TenantId", "SortOrder");
 
                     b.ToTable("school_classes", (string)null);
@@ -684,9 +761,6 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid?>("HomeroomTeacherUserId")
-                        .HasColumnType("uuid");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -700,9 +774,6 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<Guid>("SchoolClassId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -711,15 +782,11 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HomeroomTeacherUserId");
-
-                    b.HasIndex("SchoolClassId");
-
                     b.HasIndex("TenantId", "IsActive");
 
-                    b.HasIndex("TenantId", "SchoolClassId", "NameEn")
+                    b.HasIndex("TenantId", "NameEn")
                         .IsUnique()
-                        .HasDatabaseName("UQ_class_sections_school_class_id_section_name");
+                        .HasDatabaseName("UQ_sections_tenant_name_en");
 
                     b.ToTable("sections", (string)null);
                 });
@@ -731,6 +798,9 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("BranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClassSectionId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -796,6 +866,8 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
+
+                    b.HasIndex("ClassSectionId");
 
                     b.HasIndex("ParentId");
 
@@ -942,6 +1014,9 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ClassSectionId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -961,6 +1036,8 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClassSectionId");
 
                     b.HasIndex("SchoolClassId");
 
@@ -1063,6 +1140,9 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ClassSectionId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1100,6 +1180,8 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClassSectionId");
 
                     b.HasIndex("RoomId");
 
@@ -1317,6 +1399,25 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SchoolCom.Domain.Entities.ClassSection", b =>
+                {
+                    b.HasOne("SchoolCom.Domain.Entities.SchoolClass", "SchoolClass")
+                        .WithMany("ClassSections")
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolCom.Domain.Entities.Section", "Section")
+                        .WithMany("ClassSections")
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SchoolClass");
+
+                    b.Navigation("Section");
+                });
+
             modelBuilder.Entity("SchoolCom.Domain.Entities.Conversation", b =>
                 {
                     b.HasOne("SchoolCom.Domain.Entities.Student", "Student")
@@ -1481,22 +1582,23 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("SchoolCom.Domain.Entities.Section", b =>
+            modelBuilder.Entity("SchoolCom.Domain.Entities.RoomAssignment", b =>
                 {
-                    b.HasOne("SchoolCom.Domain.Entities.User", "HomeroomTeacherUser")
-                        .WithMany()
-                        .HasForeignKey("HomeroomTeacherUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("SchoolCom.Domain.Entities.SchoolClass", "SchoolClass")
-                        .WithMany("Sections")
-                        .HasForeignKey("SchoolClassId")
+                    b.HasOne("SchoolCom.Domain.Entities.ClassSection", "ClassSection")
+                        .WithMany("RoomAssignments")
+                        .HasForeignKey("ClassSectionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("HomeroomTeacherUser");
+                    b.HasOne("SchoolCom.Domain.Entities.Room", "Room")
+                        .WithMany("RoomAssignments")
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Navigation("SchoolClass");
+                    b.Navigation("ClassSection");
+
+                    b.Navigation("Room");
                 });
 
             modelBuilder.Entity("SchoolCom.Domain.Entities.Student", b =>
@@ -1504,6 +1606,11 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                     b.HasOne("SchoolCom.Domain.Entities.SchoolBranch", "Branch")
                         .WithMany()
                         .HasForeignKey("BranchId");
+
+                    b.HasOne("SchoolCom.Domain.Entities.ClassSection", "ClassSection")
+                        .WithMany("Students")
+                        .HasForeignKey("ClassSectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("SchoolCom.Domain.Entities.User", "Parent")
                         .WithMany()
@@ -1517,12 +1624,14 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.HasOne("SchoolCom.Domain.Entities.Section", "Section")
-                        .WithMany("Students")
+                        .WithMany()
                         .HasForeignKey("SectionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Branch");
+
+                    b.Navigation("ClassSection");
 
                     b.Navigation("Parent");
 
@@ -1543,6 +1652,11 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("SchoolCom.Domain.Entities.TeacherAssignment", b =>
                 {
+                    b.HasOne("SchoolCom.Domain.Entities.ClassSection", "ClassSection")
+                        .WithMany("TeacherAssignments")
+                        .HasForeignKey("ClassSectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SchoolCom.Domain.Entities.SchoolClass", "SchoolClass")
                         .WithMany("TeacherAssignments")
                         .HasForeignKey("SchoolClassId")
@@ -1550,7 +1664,7 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.HasOne("SchoolCom.Domain.Entities.Section", "Section")
-                        .WithMany("TeacherAssignments")
+                        .WithMany()
                         .HasForeignKey("SectionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -1565,6 +1679,8 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TeacherId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ClassSection");
 
                     b.Navigation("SchoolClass");
 
@@ -1588,6 +1704,11 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("SchoolCom.Domain.Entities.TimetableEntry", b =>
                 {
+                    b.HasOne("SchoolCom.Domain.Entities.ClassSection", "ClassSection")
+                        .WithMany("TimetableEntries")
+                        .HasForeignKey("ClassSectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SchoolCom.Domain.Entities.Room", "Room")
                         .WithMany("TimetableEntries")
                         .HasForeignKey("RoomId")
@@ -1601,7 +1722,7 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.HasOne("SchoolCom.Domain.Entities.Section", "Section")
-                        .WithMany("TimetableEntries")
+                        .WithMany()
                         .HasForeignKey("SectionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1617,6 +1738,8 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TeacherId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("ClassSection");
 
                     b.Navigation("Room");
 
@@ -1681,6 +1804,17 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
                     b.Navigation("AdminUser");
                 });
 
+            modelBuilder.Entity("SchoolCom.Domain.Entities.ClassSection", b =>
+                {
+                    b.Navigation("RoomAssignments");
+
+                    b.Navigation("Students");
+
+                    b.Navigation("TeacherAssignments");
+
+                    b.Navigation("TimetableEntries");
+                });
+
             modelBuilder.Entity("SchoolCom.Domain.Entities.Conversation", b =>
                 {
                     b.Navigation("Messages");
@@ -1706,12 +1840,14 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("SchoolCom.Domain.Entities.Room", b =>
                 {
+                    b.Navigation("RoomAssignments");
+
                     b.Navigation("TimetableEntries");
                 });
 
             modelBuilder.Entity("SchoolCom.Domain.Entities.SchoolClass", b =>
                 {
-                    b.Navigation("Sections");
+                    b.Navigation("ClassSections");
 
                     b.Navigation("Students");
 
@@ -1722,11 +1858,7 @@ namespace SchoolCom.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("SchoolCom.Domain.Entities.Section", b =>
                 {
-                    b.Navigation("Students");
-
-                    b.Navigation("TeacherAssignments");
-
-                    b.Navigation("TimetableEntries");
+                    b.Navigation("ClassSections");
                 });
 
             modelBuilder.Entity("SchoolCom.Domain.Entities.Student", b =>

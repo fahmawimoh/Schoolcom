@@ -2,15 +2,12 @@ namespace SchoolCom.Application.Features.Sections;
 
 public record SectionDto(
     Guid Id,
-    Guid SchoolClassId,
-    string SchoolClassNameEn,
-    string SchoolClassNameAr,
     string NameEn,
     string NameAr,
     string? DescriptionEn,
     string? DescriptionAr,
     bool IsActive,
-    int StudentCount,
+    int LinkedClassCount,
     DateTime CreatedAt);
 
 public record SectionListResult(
@@ -20,13 +17,13 @@ public record SectionListResult(
     int PageSize,
     int TotalPages);
 
-public record SchoolClassSectionOptionDto(
+public record ClassSectionOptionDto(
+    Guid ClassSectionId,
     Guid SectionId,
     string SectionNameEn,
     string SectionNameAr);
 
 public record CreateSectionRequest(
-    Guid SchoolClassId,
     string NameEn,
     string NameAr,
     string? DescriptionEn,

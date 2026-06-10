@@ -16,6 +16,8 @@ using SchoolCom.Application.Features.Students;
 using SchoolCom.Application.Features.Teachers;
 using SchoolCom.Application.Features.Subjects;
 using SchoolCom.Application.Features.Rooms;
+using SchoolCom.Application.Features.RoomAssignments;
+using SchoolCom.Application.Features.ClassSections;
 using SchoolCom.Application.Features.Timetables;
 using SchoolCom.Infrastructure.Persistence.Repositories;
 using SchoolCom.Infrastructure.Services;
@@ -45,11 +47,8 @@ public static class DependencyInjection
                     errorCodesToAdd: null);
             });
 
-            if (isDevelopment)
-            {
-                options.ConfigureWarnings(w =>
-                    w.Ignore(RelationalEventId.PendingModelChangesWarning));
-            }
+            options.ConfigureWarnings(w =>
+                w.Ignore(RelationalEventId.PendingModelChangesWarning));
 
             if (isDevelopment)
             {
@@ -93,6 +92,8 @@ public static class DependencyInjection
         services.AddScoped<IStudentRepository, StudentRepository>();
         services.AddScoped<ISchoolClassRepository, SchoolClassRepository>();
         services.AddScoped<ISectionRepository, SectionRepository>();
+        services.AddScoped<IClassSectionRepository, ClassSectionRepository>();
+        services.AddScoped<IRoomAssignmentRepository, RoomAssignmentRepository>();
         services.AddScoped<ITeacherRepository, TeacherRepository>();
         services.AddScoped<ISubjectRepository, SubjectRepository>();
         services.AddScoped<IRoomRepository, RoomRepository>();

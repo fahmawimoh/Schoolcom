@@ -18,6 +18,10 @@ import {
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
+  DeleteConfirmDialog,
+  type DeleteConfirmState,
+} from "@/components/admin/delete-confirm-dialog";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -28,6 +32,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiRequestError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/error-messages";
+import {
+  applyDeleteToListCache,
+  refreshListQueries,
+} from "@/lib/query/list-delete";
 import {
   roomsApi,
   schoolClassesApi,
@@ -98,6 +107,7 @@ export default function AdminTimetablePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<TimetableEntry | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -236,14 +246,22 @@ export default function AdminTimetablePage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => timetablesApi.delete(id),
-    onSuccess: () => {
-      toast.success(t("deleted"));
+    onSuccess: async (_result, deletedId) => {
+      applyDeleteToListCache<TimetableEntry>(
+        queryClient,
+        ["timetables"],
+        deletedId
+      );
       setDeletingId(null);
+      setDeleteConfirm(null);
+      toast.success(t("deleted"));
       if (data?.items.length === 1 && page > 1) setPage((p) => p - 1);
-      invalidate();
+      await refreshListQueries(queryClient, ["timetables"]);
     },
-    onError: (err: unknown) =>
-      toast.error(getSaveErrorMessage(err, t("saveFailed"))),
+    onError: (err: unknown) => {
+      setDeletingId(null);
+      toast.error(getApiErrorMessage(err, t("saveFailed")));
+    },
   });
 
   useEffect(() => {
@@ -502,12 +520,12 @@ export default function AdminTimetablePage() {
                               size="sm"
                               className="text-destructive hover:text-destructive"
                               disabled={deleteMutation.isPending}
-                              onClick={() => {
-                                if (window.confirm(t("deleteConfirm"))) {
-                                  setDeletingId(item.id);
-                                  deleteMutation.mutate(item.id);
-                                }
-                              }}
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  id: item.id,
+                                  description: t("deleteConfirm"),
+                                })
+                              }
                             >
                               {deleteMutation.isPending &&
                               deletingId === item.id ? (
@@ -803,6 +821,18 @@ export default function AdminTimetablePage() {
           </Card>
         </div>
       )}
+
+      <DeleteConfirmDialog
+        state={deleteConfirm}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteConfirm(null);
+        }}
+        isPending={deleteMutation.isPending}
+        onConfirm={(id) => {
+          setDeletingId(id);
+          deleteMutation.mutate(id);
+        }}
+      />
     </DashboardShell>
   );
 }

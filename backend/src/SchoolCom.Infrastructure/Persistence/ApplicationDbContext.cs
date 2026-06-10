@@ -21,6 +21,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<SchoolBranch> SchoolBranches => Set<SchoolBranch>();
     public DbSet<SchoolClass> SchoolClasses => Set<SchoolClass>();
     public DbSet<Section> Sections => Set<Section>();
+    public DbSet<ClassSection> ClassSections => Set<ClassSection>();
+    public DbSet<RoomAssignment> RoomAssignments => Set<RoomAssignment>();
     public DbSet<Subject> Subjects => Set<Subject>();
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<Teacher> Teachers => Set<Teacher>();

@@ -34,8 +34,14 @@ public class DatabaseExceptionMiddleware(RequestDelegate next, ILogger<DatabaseE
     }
 
     private static bool IsClassSectionConstraint(string? constraintName) =>
-        constraintName is "IX_sections_TenantId_SchoolClassId_NameEn"
-            or "UQ_class_sections_school_class_id_section_name";
+        constraintName is "UQ_class_sections_school_class_id_section_id"
+            or "IX_sections_TenantId_SchoolClassId_NameEn"
+            or "UQ_class_sections_school_class_id_section_name"
+            or "UQ_sections_tenant_name_en"
+            or "UQ_school_classes_tenant_name_en"
+            or "UQ_rooms_tenant_code"
+            or "UQ_room_assignments_class_section_id"
+            or "UQ_room_assignments_room_id";
 
     private static (HttpStatusCode Status, string Title, string Detail) MapPostgresError(PostgresException ex) =>
         ex.SqlState switch

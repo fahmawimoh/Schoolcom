@@ -27,6 +27,10 @@ public class DeleteTeacherCommandHandler(
         var entity = await repo.GetByIdForUpdateAsync(tenantId, request.Id, cancellationToken)
             ?? throw new KeyNotFoundException("Teacher not found");
 
+        if (await repo.HasLinkedTimetableEntriesAsync(tenantId, request.Id, cancellationToken))
+            throw new InvalidOperationException(
+                "Cannot delete a teacher that has linked timetable entries. Deactivate the teacher instead.");
+
         await repo.DeleteAsync(entity, cancellationToken);
         await repo.SaveChangesAsync(cancellationToken);
         await audit.LogAsync("Delete", "Teacher", entity.Id, ct: cancellationToken);

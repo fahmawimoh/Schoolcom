@@ -19,6 +19,10 @@ import {
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
+  DeleteConfirmDialog,
+  type DeleteConfirmState,
+} from "@/components/admin/delete-confirm-dialog";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -28,15 +32,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiRequestError } from "@/lib/api/client";
+import { getLocalizedApiErrorMessage } from "@/lib/api/error-messages";
+import {
+  applyDeleteToListCache,
+  refreshListQueries,
+} from "@/lib/query/list-delete";
 import {
   type CreateRoomPayload,
   type Room,
   type UpdateRoomPayload,
   roomsApi,
+  schoolClassesApi,
+  sectionsApi,
 } from "@/lib/api/academic";
 import {
   createRoomFormSchema,
+  isDuplicateRoom,
   type RoomFormValues,
 } from "@/lib/validations/room";
 import { useAuthStore } from "@/lib/auth/store";
@@ -46,12 +57,6 @@ const PAGE_SIZE = 10;
 
 const fieldClass = (hasError: boolean) =>
   cn(hasError && "border-destructive focus-visible:ring-destructive");
-
-function getSaveErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiRequestError) return err.message;
-  if (err instanceof Error && err.message) return err.message;
-  return fallback;
-}
 
 export default function AdminRoomsPage() {
   const t = useTranslations("rooms");
@@ -67,6 +72,7 @@ export default function AdminRoomsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Room | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -95,8 +101,19 @@ export default function AdminRoomsPage() {
         nameEnRequired: tValidation("nameEnRequired"),
         nameArRequired: tValidation("nameArRequired"),
         capacityInvalid: tValidation("capacityInvalid"),
+        schoolClassRequired: tValidation("schoolClassRequired"),
+        sectionRequired: tValidation("sectionRequired"),
+        roomDuplicate: tValidation("roomDuplicate"),
       }),
     [tValidation]
+  );
+
+  const getSaveErrorMessage = useCallback(
+    (err: unknown, fallback: string) =>
+      getLocalizedApiErrorMessage(err, locale, fallback, (key) =>
+        tValidation(key as "roomDuplicate")
+      ),
+    [locale, tValidation]
   );
 
   const form = useForm<RoomFormValues>({
@@ -105,11 +122,48 @@ export default function AdminRoomsPage() {
     defaultValues: {
       nameEn: "",
       nameAr: "",
-      code: "",
       capacity: "",
       isActive: true,
+      schoolClassId: "",
+      sectionId: "",
     },
   });
+
+  const watchedSchoolClassId = form.watch("schoolClassId");
+
+  const { data: schoolClasses } = useQuery({
+    queryKey: ["school-classes-options"],
+    queryFn: () => schoolClassesApi.list({ page: 1, pageSize: 100, isActive: true }),
+    enabled: isAdmin,
+  });
+
+  const { data: allSections } = useQuery({
+    queryKey: ["section-options"],
+    queryFn: () => sectionsApi.list({ page: 1, pageSize: 100 }),
+    enabled: isAdmin,
+  });
+
+  const { data: allRooms } = useQuery({
+    queryKey: ["rooms-all"],
+    queryFn: () => roomsApi.list({ page: 1, pageSize: 100 }),
+    enabled: isAdmin && dialogOpen,
+  });
+
+  const { data: sectionOptions } = useQuery({
+    queryKey: ["section-options-by-class", watchedSchoolClassId],
+    queryFn: () => sectionsApi.getBySchoolClass(watchedSchoolClassId),
+    enabled: isAdmin && dialogOpen && !!watchedSchoolClassId,
+  });
+
+  const schoolClassById = useMemo(
+    () => new Map(schoolClasses?.items.map((c) => [c.id, c]) ?? []),
+    [schoolClasses]
+  );
+
+  const sectionById = useMemo(
+    () => new Map(allSections?.items.map((s) => [s.id, s]) ?? []),
+    [allSections]
+  );
 
   const fieldError = (name: FieldPath<RoomFormValues>) =>
     form.formState.errors[name]?.message;
@@ -145,14 +199,21 @@ export default function AdminRoomsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => roomsApi.delete(id),
-    onSuccess: () => {
-      toast.success(t("deleted"));
+    onSuccess: async (_result, deletedId) => {
+      applyDeleteToListCache<Room>(queryClient, ["rooms"], deletedId);
       setDeletingId(null);
+      setDeleteConfirm(null);
+      toast.success(t("deleted"));
       if (data?.items.length === 1 && page > 1) setPage((p) => p - 1);
-      invalidate();
+      await refreshListQueries(queryClient, ["rooms"], [
+        ["rooms-options"],
+        ["rooms-all"],
+      ]);
     },
-    onError: (err: unknown) =>
-      toast.error(getSaveErrorMessage(err, t("saveFailed"))),
+    onError: (err: unknown) => {
+      setDeletingId(null);
+      toast.error(getSaveErrorMessage(err, t("saveFailed")));
+    },
   });
 
   useEffect(() => {
@@ -163,14 +224,20 @@ export default function AdminRoomsPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  useEffect(() => {
+    if (!dialogOpen || editingItem) return;
+    form.setValue("sectionId", "");
+  }, [watchedSchoolClassId, dialogOpen, editingItem, form]);
+
   const openCreate = () => {
     setEditingItem(null);
     form.reset({
       nameEn: "",
       nameAr: "",
-      code: "",
       capacity: "",
       isActive: true,
+      schoolClassId: schoolClasses?.items[0]?.id ?? "",
+      sectionId: "",
     });
     setDialogOpen(true);
   };
@@ -180,9 +247,10 @@ export default function AdminRoomsPage() {
     form.reset({
       nameEn: item.nameEn,
       nameAr: item.nameAr,
-      code: item.code ?? "",
       capacity: item.capacity != null ? String(item.capacity) : "",
       isActive: item.isActive,
+      schoolClassId: item.schoolClassId ?? "",
+      sectionId: item.sectionId ?? "",
     });
     setDialogOpen(true);
   };
@@ -191,10 +259,27 @@ export default function AdminRoomsPage() {
     const payload = {
       nameEn: values.nameEn.trim(),
       nameAr: values.nameAr.trim(),
-      code: values.code?.trim() || undefined,
       capacity: values.capacity ? Number(values.capacity) : undefined,
       isActive: values.isActive,
+      schoolClassId: values.schoolClassId,
+      sectionId: values.sectionId,
     };
+
+    const duplicate = isDuplicateRoom(
+      allRooms?.items ?? [],
+      {
+        nameEn: payload.nameEn,
+        schoolClassId: payload.schoolClassId,
+        sectionId: payload.sectionId,
+      },
+      editingItem?.id
+    );
+
+    if (duplicate) {
+      form.setError("nameEn", { message: tValidation("roomDuplicate") });
+      toast.error(tValidation("roomDuplicate"));
+      return;
+    }
 
     if (editingItem) {
       updateMutation.mutate({ id: editingItem.id, payload });
@@ -291,6 +376,8 @@ export default function AdminRoomsPage() {
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="text-start p-3 font-medium">{t("name")}</th>
+                      <th className="text-start p-3 font-medium">{t("schoolClass")}</th>
+                      <th className="text-start p-3 font-medium">{t("section")}</th>
                       <th className="text-start p-3 font-medium">{t("code")}</th>
                       <th className="text-start p-3 font-medium">{t("capacity")}</th>
                       <th className="text-start p-3 font-medium">{t("status")}</th>
@@ -302,6 +389,24 @@ export default function AdminRoomsPage() {
                       <tr key={item.id} className="border-t">
                         <td className="p-3">
                           {pickLocalized(locale, item.nameEn, item.nameAr)}
+                        </td>
+                        <td className="p-3">
+                          {item.schoolClassId && schoolClassById.has(item.schoolClassId)
+                            ? pickLocalized(
+                                locale,
+                                schoolClassById.get(item.schoolClassId)!.nameEn,
+                                schoolClassById.get(item.schoolClassId)!.nameAr
+                              )
+                            : "—"}
+                        </td>
+                        <td className="p-3">
+                          {item.sectionId && sectionById.has(item.sectionId)
+                            ? pickLocalized(
+                                locale,
+                                sectionById.get(item.sectionId)!.nameEn,
+                                sectionById.get(item.sectionId)!.nameAr
+                              )
+                            : "—"}
                         </td>
                         <td className="p-3 font-mono text-xs" dir="ltr">
                           {item.code ?? "—"}
@@ -338,10 +443,10 @@ export default function AdminRoomsPage() {
                                   item.nameEn,
                                   item.nameAr
                                 );
-                                if (window.confirm(t("deleteConfirm", { name }))) {
-                                  setDeletingId(item.id);
-                                  deleteMutation.mutate(item.id);
-                                }
+                                setDeleteConfirm({
+                                  id: item.id,
+                                  description: t("deleteConfirm", { name }),
+                                });
                               }}
                             >
                               {deleteMutation.isPending &&
@@ -441,26 +546,82 @@ export default function AdminRoomsPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="code">{t("code")}</Label>
-                    <Input id="code" dir="ltr" {...form.register("code")} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="capacity">{t("capacity")}</Label>
-                    <Input
-                      id="capacity"
-                      type="number"
-                      min={1}
-                      dir="ltr"
-                      aria-invalid={!!fieldError("capacity")}
-                      className={fieldClass(!!fieldError("capacity"))}
-                      {...form.register("capacity")}
-                    />
-                    {fieldError("capacity") && (
+                    <Label htmlFor="schoolClassId">{t("schoolClass")}</Label>
+                    <select
+                      id="schoolClassId"
+                      className={cn(
+                        "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm",
+                        fieldClass(!!fieldError("schoolClassId"))
+                      )}
+                      aria-invalid={!!fieldError("schoolClassId")}
+                      {...form.register("schoolClassId")}
+                    >
+                      <option value="">{t("selectSchoolClass")}</option>
+                      {schoolClasses?.items.map((sc) => (
+                        <option key={sc.id} value={sc.id}>
+                          {pickLocalized(locale, sc.nameEn, sc.nameAr)}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldError("schoolClassId") && (
                       <p className="text-xs text-destructive" role="alert">
-                        {fieldError("capacity")}
+                        {fieldError("schoolClassId")}
                       </p>
                     )}
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sectionId">{t("section")}</Label>
+                    <select
+                      id="sectionId"
+                      className={cn(
+                        "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm",
+                        fieldClass(!!fieldError("sectionId"))
+                      )}
+                      aria-invalid={!!fieldError("sectionId")}
+                      disabled={!watchedSchoolClassId}
+                      {...form.register("sectionId")}
+                    >
+                      <option value="">{t("selectSection")}</option>
+                      {sectionOptions?.map((opt) => (
+                        <option key={opt.sectionId} value={opt.sectionId}>
+                          {pickLocalized(
+                            locale,
+                            opt.sectionNameEn,
+                            opt.sectionNameAr
+                          )}
+                        </option>
+                      ))}
+                    </select>
+                    {watchedSchoolClassId &&
+                      sectionOptions &&
+                      sectionOptions.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {t("noSectionsForClass")}
+                        </p>
+                      )}
+                    {fieldError("sectionId") && (
+                      <p className="text-xs text-destructive" role="alert">
+                        {fieldError("sectionId")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="capacity">{t("capacity")}</Label>
+                  <Input
+                    id="capacity"
+                    type="number"
+                    min={1}
+                    dir="ltr"
+                    aria-invalid={!!fieldError("capacity")}
+                    className={fieldClass(!!fieldError("capacity"))}
+                    {...form.register("capacity")}
+                  />
+                  {fieldError("capacity") && (
+                    <p className="text-xs text-destructive" role="alert">
+                      {fieldError("capacity")}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -501,6 +662,18 @@ export default function AdminRoomsPage() {
           </Card>
         </div>
       )}
+
+      <DeleteConfirmDialog
+        state={deleteConfirm}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteConfirm(null);
+        }}
+        isPending={deleteMutation.isPending}
+        onConfirm={(id) => {
+          setDeletingId(id);
+          deleteMutation.mutate(id);
+        }}
+      />
     </DashboardShell>
   );
 }

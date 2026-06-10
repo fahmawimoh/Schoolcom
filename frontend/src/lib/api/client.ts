@@ -39,6 +39,7 @@ export interface ApiErrorBody {
   errorCode?: string;
   translationKey?: string;
   title?: string;
+  detail?: string;
   message?: string;
   messageEn?: string;
   messageAr?: string;
@@ -112,9 +113,10 @@ export async function apiFetch<T>(
     const translationKey = body.translationKey;
     const message =
       body?.errors?.[0]?.message ??
-      body?.title ??
+      body?.detail ??
       body?.messageEn ??
       body?.message ??
+      body?.title ??
       "Request failed";
 
     if (

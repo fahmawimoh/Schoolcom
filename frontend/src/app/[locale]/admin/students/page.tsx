@@ -19,6 +19,10 @@ import {
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
+  DeleteConfirmDialog,
+  type DeleteConfirmState,
+} from "@/components/admin/delete-confirm-dialog";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -35,6 +39,11 @@ import {
   type Student,
   type UpdateStudentPayload,
 } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/error-messages";
+import {
+  applyDeleteToListCache,
+  refreshListQueries,
+} from "@/lib/query/list-delete";
 import { sectionsApi } from "@/lib/api/academic";
 import {
   createStudentFormSchema,
@@ -71,6 +80,7 @@ export default function AdminStudentsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -173,14 +183,18 @@ export default function AdminStudentsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => studentsApi.delete(id),
-    onSuccess: () => {
-      toast.success(t("deleted"));
+    onSuccess: async (_result, deletedId) => {
+      applyDeleteToListCache<Student>(queryClient, ["students"], deletedId);
       setDeletingId(null);
+      setDeleteConfirm(null);
+      toast.success(t("deleted"));
       if (data?.items.length === 1 && page > 1) setPage((p) => p - 1);
-      invalidateStudents();
+      await refreshListQueries(queryClient, ["students"], [["student-filters"]]);
     },
-    onError: (err: unknown) =>
-      toast.error(getSaveErrorMessage(err, t("saveFailed"))),
+    onError: (err: unknown) => {
+      setDeletingId(null);
+      toast.error(getApiErrorMessage(err, t("saveFailed")));
+    },
   });
 
   useEffect(() => {
@@ -426,16 +440,14 @@ export default function AdminStudentsPage() {
                               size="sm"
                               className="text-destructive hover:text-destructive"
                               disabled={deleteMutation.isPending}
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    t("deleteConfirm", { name: student.fullName })
-                                  )
-                                ) {
-                                  setDeletingId(student.id);
-                                  deleteMutation.mutate(student.id);
-                                }
-                              }}
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  id: student.id,
+                                  description: t("deleteConfirm", {
+                                    name: student.fullName,
+                                  }),
+                                })
+                              }
                             >
                               {deleteMutation.isPending &&
                               deletingId === student.id ? (
@@ -725,6 +737,18 @@ export default function AdminStudentsPage() {
           </Card>
         </div>
       )}
+
+      <DeleteConfirmDialog
+        state={deleteConfirm}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteConfirm(null);
+        }}
+        isPending={deleteMutation.isPending}
+        onConfirm={(id) => {
+          setDeletingId(id);
+          deleteMutation.mutate(id);
+        }}
+      />
     </DashboardShell>
   );
 }

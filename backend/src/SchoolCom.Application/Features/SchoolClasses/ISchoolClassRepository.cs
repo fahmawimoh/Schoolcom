@@ -16,7 +16,7 @@ public interface ISchoolClassRepository
 
     Task<SchoolClass?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct);
     Task<SchoolClass?> GetByIdForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct);
-    Task<SchoolClass?> GetByIdWithSectionsForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct);
+    Task<bool> NameExistsAsync(Guid tenantId, string nameEn, Guid? excludeId, CancellationToken ct);
     Task<bool> HasLinkedStudentsOrAssignmentsAsync(Guid tenantId, Guid id, CancellationToken ct);
     Task AddAsync(SchoolClass entity, CancellationToken ct);
     Task DeleteAsync(SchoolClass entity, CancellationToken ct);

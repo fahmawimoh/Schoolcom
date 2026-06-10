@@ -20,6 +20,16 @@ public interface IRoomRepository
 
     Task<bool> HasLinkedTimetableEntriesAsync(Guid tenantId, Guid id, CancellationToken ct);
 
+    Task<bool> CodeExistsAsync(
+        Guid tenantId,
+        string? code,
+        Guid? excludeRoomId,
+        CancellationToken ct);
+
+    Task<string> GenerateUniqueRoomCodeAsync(Guid tenantId, CancellationToken ct);
+
+    Task<RoomAssignment?> GetAssignmentByRoomIdAsync(Guid tenantId, Guid roomId, CancellationToken ct);
+
     Task AddAsync(Room entity, CancellationToken ct);
 
     Task DeleteAsync(Room entity, CancellationToken ct);

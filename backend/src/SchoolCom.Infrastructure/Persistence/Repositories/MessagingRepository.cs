@@ -40,7 +40,13 @@ public class MessagingRepository(ApplicationDbContext db) : IMessagingRepository
     public Task<Guid?> GetHomeroomTeacherIdAsync(Guid tenantId, Guid studentId, CancellationToken ct) =>
         db.Students
             .Where(s => s.TenantId == tenantId && s.Id == studentId)
-            .Select(s => s.Section.HomeroomTeacherUserId)
+            .Select(s => db.TeacherAssignments
+                .Where(ta =>
+                    ta.SchoolClassId == s.SchoolClassId &&
+                    ta.SectionId == s.SectionId &&
+                    ta.Teacher.UserId != null)
+                .Select(ta => ta.Teacher.UserId)
+                .FirstOrDefault())
             .FirstOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<ConversationListItemDto>> GetConversationsForUserAsync(
@@ -126,10 +132,10 @@ public class MessagingRepository(ApplicationDbContext db) : IMessagingRepository
                 .AsNoTracking()
                 .Where(s =>
                     s.TenantId == tenantId &&
-                    (s.Section.HomeroomTeacherUserId == userId ||
-                     db.TeacherAssignments.Any(ta =>
-                         ta.SectionId == s.SectionId &&
-                         ta.Teacher.UserId == userId)))
+                    db.TeacherAssignments.Any(ta =>
+                        ta.SchoolClassId == s.SchoolClassId &&
+                        ta.SectionId == s.SectionId &&
+                        ta.Teacher.UserId == userId))
                 .OrderBy(s => s.FirstNameEn)
                 .ThenBy(s => s.LastNameEn)
                 .Select(s => new LinkedStudentDto(

@@ -17,6 +17,18 @@ public class GetRoomByIdQueryHandler(
         var entity = await repo.GetByIdAsync(tenantId, request.Id, ct)
             ?? throw new KeyNotFoundException("Room not found");
 
-        return new RoomDto(entity.Id, entity.NameEn, entity.NameAr, entity.Code, entity.Capacity, entity.IsActive, entity.CreatedAt);
+        var assignment = entity.RoomAssignments.FirstOrDefault();
+
+        return new RoomDto(
+            entity.Id,
+            entity.NameEn,
+            entity.NameAr,
+            entity.Code,
+            entity.Capacity,
+            entity.IsActive,
+            assignment?.ClassSection.SchoolClassId,
+            assignment?.ClassSection.SectionId,
+            assignment?.ClassSectionId,
+            entity.CreatedAt);
     }
 }

@@ -11,6 +11,7 @@ public class Student : TenantEntity
     public string LastNameAr { get; set; } = string.Empty;
     public Guid SchoolClassId { get; set; }
     public Guid SectionId { get; set; }
+    public Guid? ClassSectionId { get; set; }
     public Guid? BranchId { get; set; }
     public Guid? ParentId { get; set; }
     public string ParentName { get; set; } = string.Empty;
@@ -20,6 +21,7 @@ public class Student : TenantEntity
 
     public SchoolClass SchoolClass { get; set; } = null!;
     public Section Section { get; set; } = null!;
+    public ClassSection? ClassSection { get; set; }
     public SchoolBranch? Branch { get; set; }
     public User? Parent { get; set; }
     public ICollection<ParentStudent> ParentStudents { get; set; } = [];

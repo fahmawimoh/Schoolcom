@@ -52,7 +52,14 @@ public class SchoolClassRepository(ApplicationDbContext db) : ISchoolClassReposi
                 x.DescriptionAr,
                 x.SortOrder,
                 x.IsActive,
-                x.Sections.Count,
+                x.ClassSections.Count,
+                x.ClassSections
+                    .OrderBy(cs => cs.Section.NameEn)
+                    .Select(cs => new SchoolClassSectionItem(
+                        cs.SectionId,
+                        cs.Section.NameEn,
+                        cs.Section.NameAr))
+                    .ToList(),
                 x.Students.Count,
                 x.CreatedAt))
             .ToListAsync(ct);
@@ -67,26 +74,58 @@ public class SchoolClassRepository(ApplicationDbContext db) : ISchoolClassReposi
 
     public Task<SchoolClass?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct) =>
         db.SchoolClasses.AsNoTracking()
-            .Include(x => x.Sections)
+            .Include(x => x.ClassSections).ThenInclude(cs => cs.Section)
             .Include(x => x.Students)
             .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == id, ct);
 
     public Task<SchoolClass?> GetByIdForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct) =>
         db.SchoolClasses.FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == id, ct);
 
-    public Task<SchoolClass?> GetByIdWithSectionsForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct) =>
-        db.SchoolClasses
-            .Include(x => x.Sections)
-            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == id, ct);
+    public Task<bool> NameExistsAsync(Guid tenantId, string nameEn, Guid? excludeId, CancellationToken ct)
+    {
+        var normalized = nameEn.Trim().ToLower();
+        var query = db.SchoolClasses.Where(x =>
+            x.TenantId == tenantId &&
+            x.NameEn.ToLower() == normalized);
+
+        if (excludeId.HasValue)
+            query = query.Where(x => x.Id != excludeId.Value);
+
+        return query.AnyAsync(ct);
+    }
 
     public async Task<bool> HasLinkedStudentsOrAssignmentsAsync(Guid tenantId, Guid id, CancellationToken ct)
     {
-        var hasStudents = await db.Students.AnyAsync(
-            s => s.TenantId == tenantId && s.SchoolClassId == id, ct);
-        if (hasStudents) return true;
+        if (await db.Students.AnyAsync(s => s.TenantId == tenantId && s.SchoolClassId == id, ct))
+            return true;
 
-        return await db.Sections.AnyAsync(
-            s => s.TenantId == tenantId && s.SchoolClassId == id, ct);
+        if (await db.TeacherAssignments.AnyAsync(ta => ta.SchoolClassId == id, ct))
+            return true;
+
+        if (await db.TimetableEntries.AnyAsync(te => te.TenantId == tenantId && te.SchoolClassId == id, ct))
+            return true;
+
+        var classSectionIds = await db.ClassSections
+            .Where(cs => cs.TenantId == tenantId && cs.SchoolClassId == id)
+            .Select(cs => cs.Id)
+            .ToListAsync(ct);
+
+        if (classSectionIds.Count == 0)
+            return false;
+
+        if (await db.RoomAssignments.AnyAsync(
+                ra => ra.TenantId == tenantId && classSectionIds.Contains(ra.ClassSectionId), ct))
+            return true;
+
+        if (await db.TeacherAssignments.AnyAsync(
+                ta => ta.ClassSectionId.HasValue && classSectionIds.Contains(ta.ClassSectionId.Value), ct))
+            return true;
+
+        return await db.TimetableEntries.AnyAsync(
+            te => te.TenantId == tenantId &&
+                  te.ClassSectionId.HasValue &&
+                  classSectionIds.Contains(te.ClassSectionId.Value),
+            ct);
     }
 
     public async Task AddAsync(SchoolClass entity, CancellationToken ct) =>

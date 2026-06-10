@@ -8,7 +8,6 @@ public interface ISectionRepository
         Guid tenantId,
         int page,
         int pageSize,
-        Guid? schoolClassId,
         string? search,
         bool? isActive,
         string? sortBy,
@@ -19,21 +18,13 @@ public interface ISectionRepository
 
     Task<Section?> GetByIdForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct);
 
-    Task<IReadOnlyList<SchoolClassSectionOptionDto>> GetSectionsBySchoolClassAsync(
+    Task<bool> NameExistsAsync(
         Guid tenantId,
-        Guid schoolClassId,
-        CancellationToken ct);
-
-    Task<bool> SchoolClassExistsAsync(Guid tenantId, Guid schoolClassId, CancellationToken ct);
-
-    Task<bool> ClassSectionExistsAsync(
-        Guid tenantId,
-        Guid schoolClassId,
         string nameEn,
         Guid? excludeSectionId,
         CancellationToken ct);
 
-    Task<bool> HasLinkedStudentsTeachersOrTimetableAsync(Guid tenantId, Guid id, CancellationToken ct);
+    Task<bool> HasLinkedClassSectionsAsync(Guid tenantId, Guid id, CancellationToken ct);
 
     Task AddAsync(Section entity, CancellationToken ct);
 

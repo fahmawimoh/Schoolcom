@@ -5,42 +5,27 @@ namespace SchoolCom.Application.Features.SchoolClasses;
 
 internal static class SchoolClassSectionValidator
 {
-    public static void EnsureNoDuplicateNamesInRequest(IReadOnlyList<SchoolClassSectionInput>? sections)
+    public static void EnsureSectionsProvided(IReadOnlyList<Guid>? sectionIds)
     {
-        if (sections is not { Count: > 0 }) return;
+        if (sectionIds is not { Count: > 0 })
+        {
+            throw new ConflictException(
+                AcademicErrorCodes.SectionsRequired,
+                AcademicErrorMessages.SectionsRequiredEn,
+                AcademicErrorMessages.SectionsRequiredAr,
+                AcademicTranslationKeys.SectionsRequired);
+        }
+    }
 
-        var normalized = sections
-            .Select(s => s.NameEn.Trim().ToLower())
-            .ToList();
-
-        if (normalized.Count != normalized.Distinct().Count())
+    public static void EnsureNoDuplicateSectionIds(IReadOnlyList<Guid> sectionIds)
+    {
+        if (sectionIds.Count != sectionIds.Distinct().Count())
         {
             throw new ConflictException(
                 AcademicErrorCodes.ClassSectionDuplicate,
                 AcademicErrorMessages.ClassSectionDuplicateEn,
                 AcademicErrorMessages.ClassSectionDuplicateAr,
                 AcademicTranslationKeys.ClassSectionDuplicate);
-        }
-    }
-
-    public static void EnsureNoDuplicateAgainstExisting(
-        IReadOnlyList<SchoolClassSectionInput> sections,
-        IEnumerable<string> existingSectionNamesEn)
-    {
-        var existing = existingSectionNamesEn
-            .Select(n => n.Trim().ToLower())
-            .ToHashSet();
-
-        foreach (var section in sections)
-        {
-            if (existing.Contains(section.NameEn.Trim().ToLower()))
-            {
-                throw new ConflictException(
-                    AcademicErrorCodes.ClassSectionDuplicate,
-                    AcademicErrorMessages.ClassSectionDuplicateEn,
-                    AcademicErrorMessages.ClassSectionDuplicateAr,
-                    AcademicTranslationKeys.ClassSectionDuplicate);
-            }
         }
     }
 }

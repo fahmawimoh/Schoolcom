@@ -19,15 +19,12 @@ public class GetSectionByIdQueryHandler(
 
         return new SectionDto(
             entity.Id,
-            entity.SchoolClassId,
-            entity.SchoolClass.NameEn,
-            entity.SchoolClass.NameAr,
             entity.NameEn,
             entity.NameAr,
             entity.DescriptionEn,
             entity.DescriptionAr,
             entity.IsActive,
-            entity.Students.Count,
+            entity.ClassSections.Count,
             entity.CreatedAt);
     }
 }

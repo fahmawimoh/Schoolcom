@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 
 namespace SchoolCom.Infrastructure.Persistence;
@@ -18,6 +19,8 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
 
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
         optionsBuilder.UseNpgsql(connectionString);
+        optionsBuilder.ConfigureWarnings(w =>
+            w.Ignore(RelationalEventId.PendingModelChangesWarning));
         return new ApplicationDbContext(optionsBuilder.Options);
     }
 

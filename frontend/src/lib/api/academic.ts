@@ -11,6 +11,12 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
 
 // ── School Classes ──────────────────────────────────────────────────────────
 
+export interface SchoolClassSectionItem {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+}
+
 export interface SchoolClass {
   id: string;
   nameEn: string;
@@ -20,6 +26,7 @@ export interface SchoolClass {
   sortOrder: number;
   isActive: boolean;
   sectionCount: number;
+  sections: SchoolClassSectionItem[];
   studentCount: number;
   createdAt: string;
 }
@@ -32,11 +39,6 @@ export interface SchoolClassListResponse {
   totalPages: number;
 }
 
-export interface SchoolClassSectionInput {
-  nameEn: string;
-  nameAr: string;
-}
-
 export interface CreateSchoolClassPayload {
   nameEn: string;
   nameAr: string;
@@ -44,7 +46,7 @@ export interface CreateSchoolClassPayload {
   descriptionAr?: string;
   sortOrder: number;
   isActive?: boolean;
-  sections?: SchoolClassSectionInput[];
+  sectionIds: string[];
 }
 
 export interface UpdateSchoolClassPayload {
@@ -54,7 +56,7 @@ export interface UpdateSchoolClassPayload {
   descriptionAr?: string;
   sortOrder: number;
   isActive: boolean;
-  sections?: SchoolClassSectionInput[];
+  sectionIds: string[];
 }
 
 export const schoolClassesApi = {
@@ -100,15 +102,12 @@ export const schoolClassesApi = {
 
 export interface Section {
   id: string;
-  schoolClassId: string;
-  schoolClassNameEn: string;
-  schoolClassNameAr: string;
   nameEn: string;
   nameAr: string;
   descriptionEn?: string | null;
   descriptionAr?: string | null;
   isActive: boolean;
-  studentCount: number;
+  linkedClassCount: number;
   createdAt: string;
 }
 
@@ -120,14 +119,14 @@ export interface SectionListResponse {
   totalPages: number;
 }
 
-export interface SchoolClassSectionOption {
+export interface ClassSectionOption {
+  classSectionId: string;
   sectionId: string;
   sectionNameEn: string;
   sectionNameAr: string;
 }
 
 export interface CreateSectionPayload {
-  schoolClassId: string;
   nameEn: string;
   nameAr: string;
   descriptionEn?: string;
@@ -147,7 +146,6 @@ export const sectionsApi = {
   list: (params: {
     page?: number;
     pageSize?: number;
-    schoolClassId?: string;
     search?: string;
     isActive?: boolean;
     sortBy?: string;
@@ -157,7 +155,6 @@ export const sectionsApi = {
       `/admin/sections${buildQuery({
         page: params.page ?? 1,
         pageSize: params.pageSize ?? 10,
-        schoolClassId: params.schoolClassId,
         search: params.search,
         isActive: params.isActive,
         sortBy: params.sortBy,
@@ -166,7 +163,7 @@ export const sectionsApi = {
     ),
 
   getBySchoolClass: (schoolClassId: string) =>
-    apiFetch<SchoolClassSectionOption[]>(
+    apiFetch<ClassSectionOption[]>(
       `/admin/sections/by-school-class/${schoolClassId}`
     ),
 
@@ -186,6 +183,93 @@ export const sectionsApi = {
 
   delete: (id: string) =>
     apiFetch<void>(`/admin/sections/${id}`, { method: "DELETE" }),
+};
+
+// ── Room Assignments ──────────────────────────────────────────────────────────
+
+export interface RoomAssignment {
+  id: string;
+  classSectionId: string;
+  schoolClassId: string;
+  schoolClassNameEn: string;
+  schoolClassNameAr: string;
+  sectionId: string;
+  sectionNameEn: string;
+  sectionNameAr: string;
+  roomId: string;
+  roomNameEn: string;
+  roomNameAr: string;
+  roomCode?: string | null;
+  createdAt: string;
+}
+
+export interface RoomAssignmentListResponse {
+  items: RoomAssignment[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ClassSectionLookup {
+  classSectionId: string;
+  schoolClassId: string;
+  schoolClassNameEn: string;
+  schoolClassNameAr: string;
+  sectionId: string;
+  sectionNameEn: string;
+  sectionNameAr: string;
+}
+
+export interface CreateRoomAssignmentPayload {
+  classSectionId: string;
+  roomId: string;
+}
+
+export interface UpdateRoomAssignmentPayload {
+  classSectionId: string;
+  roomId: string;
+}
+
+export const roomAssignmentsApi = {
+  list: (params: {
+    page?: number;
+    pageSize?: number;
+    schoolClassId?: string;
+    sectionId?: string;
+    roomId?: string;
+  } = {}) =>
+    apiFetch<RoomAssignmentListResponse>(
+      `/admin/room-assignments${buildQuery({
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 10,
+        schoolClassId: params.schoolClassId,
+        sectionId: params.sectionId,
+        roomId: params.roomId,
+      })}`
+    ),
+
+  getClassSectionOptions: (schoolClassId?: string) =>
+    apiFetch<ClassSectionLookup[]>(
+      `/admin/room-assignments/class-section-options${buildQuery({
+        schoolClassId,
+      })}`
+    ),
+
+  create: (payload: CreateRoomAssignmentPayload) =>
+    apiFetch<RoomAssignment>("/admin/room-assignments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  update: (id: string, payload: UpdateRoomAssignmentPayload) =>
+    apiFetch<RoomAssignment>(`/admin/room-assignments/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  delete: (id: string) =>
+    apiFetch<void>(`/admin/room-assignments/${id}`, { method: "DELETE" }),
 };
 
 // ── Subjects ──────────────────────────────────────────────────────────────────
@@ -268,6 +352,9 @@ export interface Room {
   code?: string | null;
   capacity?: number | null;
   isActive: boolean;
+  schoolClassId?: string | null;
+  sectionId?: string | null;
+  classSectionId?: string | null;
   createdAt: string;
 }
 
@@ -282,17 +369,19 @@ export interface RoomListResponse {
 export interface CreateRoomPayload {
   nameEn: string;
   nameAr: string;
-  code?: string;
   capacity?: number;
   isActive?: boolean;
+  schoolClassId: string;
+  sectionId: string;
 }
 
 export interface UpdateRoomPayload {
   nameEn: string;
   nameAr: string;
-  code?: string;
   capacity?: number;
   isActive: boolean;
+  schoolClassId: string;
+  sectionId: string;
 }
 
 export const roomsApi = {

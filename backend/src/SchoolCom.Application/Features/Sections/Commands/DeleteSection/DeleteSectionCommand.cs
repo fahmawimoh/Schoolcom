@@ -27,8 +27,8 @@ public class DeleteSectionCommandHandler(
         var entity = await repo.GetByIdForUpdateAsync(tenantId, request.Id, cancellationToken)
             ?? throw new KeyNotFoundException("Section not found");
 
-        if (await repo.HasLinkedStudentsTeachersOrTimetableAsync(tenantId, request.Id, cancellationToken))
-            throw new InvalidOperationException("Cannot delete a section that has linked students, teacher assignments, or timetable entries. Deactivate it instead.");
+        if (await repo.HasLinkedClassSectionsAsync(tenantId, request.Id, cancellationToken))
+            throw new InvalidOperationException("Cannot delete a section linked to school classes. Remove the links first or deactivate the section.");
 
         await repo.DeleteAsync(entity, cancellationToken);
         await repo.SaveChangesAsync(cancellationToken);

@@ -19,6 +19,10 @@ import {
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
+  DeleteConfirmDialog,
+  type DeleteConfirmState,
+} from "@/components/admin/delete-confirm-dialog";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -29,6 +33,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiRequestError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/error-messages";
+import {
+  applyDeleteToListCache,
+  refreshListQueries,
+} from "@/lib/query/list-delete";
 import {
   type CreateSubjectPayload,
   type Subject,
@@ -68,6 +77,7 @@ export default function AdminSubjectsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Subject | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -144,14 +154,18 @@ export default function AdminSubjectsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => subjectsApi.delete(id),
-    onSuccess: () => {
-      toast.success(t("deleted"));
+    onSuccess: async (_result, deletedId) => {
+      applyDeleteToListCache<Subject>(queryClient, ["subjects"], deletedId);
       setDeletingId(null);
+      setDeleteConfirm(null);
+      toast.success(t("deleted"));
       if (data?.items.length === 1 && page > 1) setPage((p) => p - 1);
-      invalidate();
+      await refreshListQueries(queryClient, ["subjects"]);
     },
-    onError: (err: unknown) =>
-      toast.error(getSaveErrorMessage(err, t("saveFailed"))),
+    onError: (err: unknown) => {
+      setDeletingId(null);
+      toast.error(getApiErrorMessage(err, t("saveFailed")));
+    },
   });
 
   useEffect(() => {
@@ -327,10 +341,10 @@ export default function AdminSubjectsPage() {
                                   item.nameEn,
                                   item.nameAr
                                 );
-                                if (window.confirm(t("deleteConfirm", { name }))) {
-                                  setDeletingId(item.id);
-                                  deleteMutation.mutate(item.id);
-                                }
+                                setDeleteConfirm({
+                                  id: item.id,
+                                  description: t("deleteConfirm", { name }),
+                                });
                               }}
                             >
                               {deleteMutation.isPending &&
@@ -475,6 +489,18 @@ export default function AdminSubjectsPage() {
           </Card>
         </div>
       )}
+
+      <DeleteConfirmDialog
+        state={deleteConfirm}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteConfirm(null);
+        }}
+        isPending={deleteMutation.isPending}
+        onConfirm={(id) => {
+          setDeletingId(id);
+          deleteMutation.mutate(id);
+        }}
+      />
     </DashboardShell>
   );
 }

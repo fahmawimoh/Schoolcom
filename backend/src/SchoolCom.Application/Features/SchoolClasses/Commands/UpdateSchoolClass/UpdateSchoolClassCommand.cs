@@ -1,7 +1,9 @@
 using FluentValidation;
 using MediatR;
+using SchoolCom.Application.Common;
+using SchoolCom.Application.Common.Exceptions;
 using SchoolCom.Application.Common.Interfaces;
-using SchoolCom.Domain.Entities;
+using SchoolCom.Application.Features.ClassSections;
 
 namespace SchoolCom.Application.Features.SchoolClasses.Commands.UpdateSchoolClass;
 
@@ -13,7 +15,7 @@ public record UpdateSchoolClassCommand(
     string? DescriptionAr,
     int SortOrder,
     bool IsActive,
-    IReadOnlyList<SchoolClassSectionInput>? Sections = null) : IRequest<SchoolClassDto>;
+    IReadOnlyList<Guid>? SectionIds = null) : IRequest<SchoolClassDto>;
 
 public class UpdateSchoolClassCommandValidator : AbstractValidator<UpdateSchoolClassCommand>
 {
@@ -25,16 +27,13 @@ public class UpdateSchoolClassCommandValidator : AbstractValidator<UpdateSchoolC
         RuleFor(x => x.DescriptionEn).MaximumLength(500);
         RuleFor(x => x.DescriptionAr).MaximumLength(500);
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
-        RuleForEach(x => x.Sections).ChildRules(section =>
-        {
-            section.RuleFor(s => s.NameEn).NotEmpty().MaximumLength(100);
-            section.RuleFor(s => s.NameAr).NotEmpty().MaximumLength(100);
-        });
+        RuleFor(x => x.SectionIds).NotEmpty();
     }
 }
 
 public class UpdateSchoolClassCommandHandler(
     ISchoolClassRepository repo,
+    IClassSectionRepository classSectionRepo,
     ICurrentUserService currentUser,
     IAuditService audit) : IRequestHandler<UpdateSchoolClassCommand, SchoolClassDto>
 {
@@ -43,17 +42,23 @@ public class UpdateSchoolClassCommandHandler(
         var tenantId = currentUser.TenantId
             ?? throw new UnauthorizedAccessException("Tenant not found");
 
-        var entity = await repo.GetByIdWithSectionsForUpdateAsync(tenantId, request.Id, ct)
+        var entity = await repo.GetByIdForUpdateAsync(tenantId, request.Id, ct)
             ?? throw new KeyNotFoundException("School class not found");
 
-        SchoolClassSectionValidator.EnsureNoDuplicateNamesInRequest(request.Sections);
+        SchoolClassSectionValidator.EnsureSectionsProvided(request.SectionIds);
+        SchoolClassSectionValidator.EnsureNoDuplicateSectionIds(request.SectionIds!);
 
-        if (request.Sections is { Count: > 0 })
+        if (await repo.NameExistsAsync(tenantId, request.NameEn, excludeId: entity.Id, ct))
         {
-            SchoolClassSectionValidator.EnsureNoDuplicateAgainstExisting(
-                request.Sections,
-                entity.Sections.Select(s => s.NameEn));
+            throw new ConflictException(
+                AcademicErrorCodes.SchoolClassNameDuplicate,
+                AcademicErrorMessages.SchoolClassNameDuplicateEn,
+                AcademicErrorMessages.SchoolClassNameDuplicateAr,
+                AcademicTranslationKeys.SchoolClassNameDuplicate);
         }
+
+        if (!await classSectionRepo.AllSectionsExistAsync(tenantId, request.SectionIds!, ct))
+            throw new KeyNotFoundException("One or more sections were not found");
 
         entity.NameEn = request.NameEn.Trim();
         entity.NameAr = request.NameAr.Trim();
@@ -62,29 +67,13 @@ public class UpdateSchoolClassCommandHandler(
         entity.SortOrder = request.SortOrder;
         entity.IsActive = request.IsActive;
 
-        if (request.Sections is { Count: > 0 })
-        {
-            foreach (var section in request.Sections)
-            {
-                entity.Sections.Add(new Section
-                {
-                    TenantId = tenantId,
-                    SchoolClassId = entity.Id,
-                    NameEn = section.NameEn.Trim(),
-                    NameAr = section.NameAr.Trim(),
-                    IsActive = true
-                });
-            }
-        }
-
+        await classSectionRepo.SyncLinksAsync(tenantId, entity.Id, request.SectionIds!, ct);
         await repo.SaveChangesAsync(ct);
         await audit.LogAsync("Update", "SchoolClass", entity.Id, ct: ct);
 
         var updated = await repo.GetByIdAsync(tenantId, entity.Id, ct)
             ?? throw new InvalidOperationException("Failed to load updated school class");
 
-        return new SchoolClassDto(
-            updated.Id, updated.NameEn, updated.NameAr, updated.DescriptionEn, updated.DescriptionAr,
-            updated.SortOrder, updated.IsActive, updated.Sections.Count, updated.Students.Count, updated.CreatedAt);
+        return SchoolClassMapper.ToDto(updated);
     }
 }

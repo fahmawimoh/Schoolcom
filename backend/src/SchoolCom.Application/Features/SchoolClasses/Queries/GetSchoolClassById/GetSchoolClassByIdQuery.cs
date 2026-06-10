@@ -17,8 +17,6 @@ public class GetSchoolClassByIdQueryHandler(
         var entity = await repo.GetByIdAsync(tenantId, request.Id, ct)
             ?? throw new KeyNotFoundException("School class not found");
 
-        return new SchoolClassDto(
-            entity.Id, entity.NameEn, entity.NameAr, entity.DescriptionEn, entity.DescriptionAr,
-            entity.SortOrder, entity.IsActive, entity.Sections.Count, entity.Students.Count, entity.CreatedAt);
+        return SchoolClassMapper.ToDto(entity);
     }
 }

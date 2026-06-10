@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using SchoolCom.Application.Common.Interfaces;
+using SchoolCom.Application.Features.RoomAssignments;
 
 namespace SchoolCom.Application.Features.Rooms.Commands.DeleteRoom;
 
@@ -16,6 +17,7 @@ public class DeleteRoomCommandValidator : AbstractValidator<DeleteRoomCommand>
 
 public class DeleteRoomCommandHandler(
     IRoomRepository repo,
+    IRoomAssignmentRepository assignmentRepo,
     ICurrentUserService currentUser,
     IAuditService audit) : IRequestHandler<DeleteRoomCommand>
 {
@@ -29,6 +31,11 @@ public class DeleteRoomCommandHandler(
 
         if (await repo.HasLinkedTimetableEntriesAsync(tenantId, request.Id, cancellationToken))
             throw new InvalidOperationException("Cannot delete a room that has linked timetable entries. Deactivate it instead.");
+
+        var assignment = await assignmentRepo.GetByRoomIdForUpdateAsync(
+            tenantId, request.Id, cancellationToken);
+        if (assignment is not null)
+            await assignmentRepo.DeleteAsync(assignment, cancellationToken);
 
         await repo.DeleteAsync(entity, cancellationToken);
         await repo.SaveChangesAsync(cancellationToken);

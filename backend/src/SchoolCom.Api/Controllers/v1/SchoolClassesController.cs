@@ -49,7 +49,7 @@ public class SchoolClassesController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(
             new CreateSchoolClassCommand(
                 request.NameEn, request.NameAr, request.DescriptionEn, request.DescriptionAr,
-                request.SortOrder, request.IsActive, request.Sections), ct);
+                request.SortOrder, request.IsActive, request.SectionIds), ct);
         return CreatedAtAction(nameof(GetSchoolClass), new { id = result.Id }, new ApiResponse<SchoolClassDto>(result));
     }
 
@@ -62,7 +62,7 @@ public class SchoolClassesController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(
             new UpdateSchoolClassCommand(
                 id, request.NameEn, request.NameAr, request.DescriptionEn, request.DescriptionAr,
-                request.SortOrder, request.IsActive, request.Sections), ct);
+                request.SortOrder, request.IsActive, request.SectionIds), ct);
         return Ok(new ApiResponse<SchoolClassDto>(result));
     }
 

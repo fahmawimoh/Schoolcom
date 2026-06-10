@@ -1,4 +1,11 @@
+using SchoolCom.Domain.Entities;
+
 namespace SchoolCom.Application.Features.SchoolClasses;
+
+public record SchoolClassSectionItem(
+    Guid Id,
+    string NameEn,
+    string NameAr);
 
 public record SchoolClassDto(
     Guid Id,
@@ -9,8 +16,32 @@ public record SchoolClassDto(
     int SortOrder,
     bool IsActive,
     int SectionCount,
+    IReadOnlyList<SchoolClassSectionItem> Sections,
     int StudentCount,
     DateTime CreatedAt);
+
+public static class SchoolClassMapper
+{
+    public static SchoolClassDto ToDto(SchoolClass entity) =>
+        new(
+            entity.Id,
+            entity.NameEn,
+            entity.NameAr,
+            entity.DescriptionEn,
+            entity.DescriptionAr,
+            entity.SortOrder,
+            entity.IsActive,
+            entity.ClassSections.Count,
+            entity.ClassSections
+                .OrderBy(cs => cs.Section.NameEn)
+                .Select(cs => new SchoolClassSectionItem(
+                    cs.SectionId,
+                    cs.Section.NameEn,
+                    cs.Section.NameAr))
+                .ToList(),
+            entity.Students.Count,
+            entity.CreatedAt);
+}
 
 public record SchoolClassListResult(
     IReadOnlyList<SchoolClassDto> Items,
@@ -19,10 +50,6 @@ public record SchoolClassListResult(
     int PageSize,
     int TotalPages);
 
-public record SchoolClassSectionInput(
-    string NameEn,
-    string NameAr);
-
 public record CreateSchoolClassRequest(
     string NameEn,
     string NameAr,
@@ -30,7 +57,7 @@ public record CreateSchoolClassRequest(
     string? DescriptionAr,
     int SortOrder,
     bool IsActive = true,
-    IReadOnlyList<SchoolClassSectionInput>? Sections = null);
+    IReadOnlyList<Guid>? SectionIds = null);
 
 public record UpdateSchoolClassRequest(
     string NameEn,
@@ -39,4 +66,4 @@ public record UpdateSchoolClassRequest(
     string? DescriptionAr,
     int SortOrder,
     bool IsActive,
-    IReadOnlyList<SchoolClassSectionInput>? Sections = null);
+    IReadOnlyList<Guid>? SectionIds = null);

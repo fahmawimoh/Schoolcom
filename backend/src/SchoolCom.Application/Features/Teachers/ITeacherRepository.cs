@@ -19,6 +19,8 @@ public interface ITeacherRepository
 
     Task<Teacher?> GetByIdForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct);
 
+    Task<bool> HasLinkedTimetableEntriesAsync(Guid tenantId, Guid id, CancellationToken ct);
+
     Task<bool> EmployeeNumberExistsAsync(
         Guid tenantId,
         string employeeNumber,

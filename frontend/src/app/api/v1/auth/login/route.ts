@@ -30,6 +30,11 @@ export async function POST(request: NextRequest) {
       return jsonWithAuthCookie(payload);
     }
 
+    // Do not fall back to demo login when the API server is unreachable.
+    if (backendResponse.status !== 401) {
+      return backendResponse;
+    }
+
     const user = findUserByEmail(email);
     if (!user || user.password !== password) {
       return NextResponse.json(

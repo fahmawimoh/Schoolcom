@@ -21,6 +21,10 @@ import {
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
+  DeleteConfirmDialog,
+  type DeleteConfirmState,
+} from "@/components/admin/delete-confirm-dialog";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -31,6 +35,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiRequestError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/error-messages";
+import {
+  applyDeleteToListCache,
+  refreshListQueries,
+} from "@/lib/query/list-delete";
 import {
   schoolClassesApi,
   sectionsApi,
@@ -221,6 +230,7 @@ export default function AdminTeachersPage() {
   const [assigningTeacher, setAssigningTeacher] = useState<Teacher | null>(null);
   const [assignmentRows, setAssignmentRows] = useState<AssignmentRow[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -323,14 +333,20 @@ export default function AdminTeachersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => teachersApi.delete(id),
-    onSuccess: () => {
-      toast.success(t("deleted"));
+    onSuccess: async (_result, deletedId) => {
+      applyDeleteToListCache<Teacher>(queryClient, ["teachers"], deletedId);
       setDeletingId(null);
+      setDeleteConfirm(null);
+      toast.success(t("deleted"));
       if (data?.items.length === 1 && page > 1) setPage((p) => p - 1);
-      invalidate();
+      await refreshListQueries(queryClient, ["teachers"], [
+        ["teachers-options"],
+      ]);
     },
-    onError: (err: unknown) =>
-      toast.error(getSaveErrorMessage(err, t("saveFailed"))),
+    onError: (err: unknown) => {
+      setDeletingId(null);
+      toast.error(getApiErrorMessage(err, t("saveFailed")));
+    },
   });
 
   const assignmentMutation = useMutation({
@@ -612,10 +628,10 @@ export default function AdminTeachersPage() {
                               disabled={deleteMutation.isPending}
                               onClick={() => {
                                 const name = teacherFullName(locale, teacher);
-                                if (window.confirm(t("deleteConfirm", { name }))) {
-                                  setDeletingId(teacher.id);
-                                  deleteMutation.mutate(teacher.id);
-                                }
+                                setDeleteConfirm({
+                                  id: teacher.id,
+                                  description: t("deleteConfirm", { name }),
+                                });
                               }}
                             >
                               {deleteMutation.isPending &&
@@ -943,6 +959,18 @@ export default function AdminTeachersPage() {
           </Card>
         </div>
       )}
+
+      <DeleteConfirmDialog
+        state={deleteConfirm}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteConfirm(null);
+        }}
+        isPending={deleteMutation.isPending}
+        onConfirm={(id) => {
+          setDeletingId(id);
+          deleteMutation.mutate(id);
+        }}
+      />
     </DashboardShell>
   );
 }

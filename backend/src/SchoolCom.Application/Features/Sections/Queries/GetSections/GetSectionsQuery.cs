@@ -7,7 +7,6 @@ namespace SchoolCom.Application.Features.Sections.Queries.GetSections;
 public record GetSectionsQuery(
     int Page = 1,
     int PageSize = 10,
-    Guid? SchoolClassId = null,
     string? Search = null,
     bool? IsActive = null,
     string? SortBy = null,
@@ -35,7 +34,6 @@ public class GetSectionsQueryHandler(
             tenantId,
             request.Page,
             request.PageSize,
-            request.SchoolClassId,
             request.Search,
             request.IsActive,
             request.SortBy,

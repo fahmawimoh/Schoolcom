@@ -41,4 +41,32 @@ public static class DatabaseInitializer
             db.Database.GetDbConnection().Database,
             applied.Count());
     }
+
+    public static async Task ResetAndSeedAsync(
+        IServiceProvider services,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<ApplicationDbContext>>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+
+        logger.LogWarning(
+            "RESET_DATABASE requested — clearing all data in {Connection}",
+            PostgresConnectionBuilder.DescribeForLogging(configuration));
+
+        if (!await db.Database.CanConnectAsync(cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "Cannot connect to PostgreSQL. Verify the server is running and credentials are correct.");
+        }
+
+        await db.Database.MigrateAsync(cancellationToken);
+        await DatabaseCleaner.ClearAllDataAsync(db, logger, cancellationToken);
+        await DbSeeder.SeedAsync(db, scope.ServiceProvider);
+
+        logger.LogWarning(
+            "Database reset complete. Fresh demo data seeded in {Database}.",
+            db.Database.GetDbConnection().Database);
+    }
 }

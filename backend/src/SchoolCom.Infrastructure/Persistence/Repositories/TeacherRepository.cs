@@ -109,6 +109,9 @@ public class TeacherRepository(ApplicationDbContext db) : ITeacherRepository
     public Task<Teacher?> GetByIdForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct) =>
         db.Teachers.FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == id, ct);
 
+    public Task<bool> HasLinkedTimetableEntriesAsync(Guid tenantId, Guid id, CancellationToken ct) =>
+        db.TimetableEntries.AnyAsync(te => te.TenantId == tenantId && te.TeacherId == id, ct);
+
     public Task<bool> EmployeeNumberExistsAsync(
         Guid tenantId,
         string employeeNumber,
@@ -134,8 +137,8 @@ public class TeacherRepository(ApplicationDbContext db) : ITeacherRepository
         Guid schoolClassId,
         Guid sectionId,
         CancellationToken ct) =>
-        db.Sections.AnyAsync(
-            x => x.TenantId == tenantId && x.Id == sectionId && x.SchoolClassId == schoolClassId,
+        db.ClassSections.AnyAsync(
+            x => x.TenantId == tenantId && x.SchoolClassId == schoolClassId && x.SectionId == sectionId,
             ct);
 
     public Task<bool> SubjectExistsAsync(Guid tenantId, Guid subjectId, CancellationToken ct) =>

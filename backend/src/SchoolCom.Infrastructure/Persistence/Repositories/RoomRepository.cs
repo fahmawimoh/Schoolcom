@@ -48,7 +48,17 @@ public class RoomRepository(ApplicationDbContext db) : IRoomRepository
         var items = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new RoomDto(x.Id, x.NameEn, x.NameAr, x.Code, x.Capacity, x.IsActive, x.CreatedAt))
+            .Select(x => new RoomDto(
+                x.Id,
+                x.NameEn,
+                x.NameAr,
+                x.Code,
+                x.Capacity,
+                x.IsActive,
+                x.RoomAssignments.Select(ra => (Guid?)ra.ClassSection.SchoolClassId).FirstOrDefault(),
+                x.RoomAssignments.Select(ra => (Guid?)ra.ClassSection.SectionId).FirstOrDefault(),
+                x.RoomAssignments.Select(ra => (Guid?)ra.ClassSectionId).FirstOrDefault(),
+                x.CreatedAt))
             .ToListAsync(ct);
 
         return new RoomListResult(
@@ -59,14 +69,68 @@ public class RoomRepository(ApplicationDbContext db) : IRoomRepository
             PaginationHelper.TotalPages(totalCount, pageSize));
     }
 
-    public Task<Room?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct) =>
-        BaseQuery(tenantId).FirstOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<Room?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct) =>
+        await BaseQuery(tenantId)
+            .Include(x => x.RoomAssignments)
+            .ThenInclude(ra => ra.ClassSection)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
     public Task<Room?> GetByIdForUpdateAsync(Guid tenantId, Guid id, CancellationToken ct) =>
         db.Rooms.FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == id, ct);
 
     public Task<bool> HasLinkedTimetableEntriesAsync(Guid tenantId, Guid id, CancellationToken ct) =>
         db.TimetableEntries.AnyAsync(te => te.TenantId == tenantId && te.RoomId == id, ct);
+
+    public Task<bool> CodeExistsAsync(
+        Guid tenantId,
+        string? code,
+        Guid? excludeRoomId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return Task.FromResult(false);
+
+        var normalized = code.Trim().ToLower();
+        var query = db.Rooms.Where(x =>
+            x.TenantId == tenantId &&
+            x.Code != null &&
+            x.Code.ToLower() == normalized);
+
+        if (excludeRoomId.HasValue)
+            query = query.Where(x => x.Id != excludeRoomId.Value);
+
+        return query.AnyAsync(ct);
+    }
+
+    public async Task<string> GenerateUniqueRoomCodeAsync(Guid tenantId, CancellationToken ct)
+    {
+        var existingCodes = await db.Rooms
+            .Where(x => x.TenantId == tenantId && x.Code != null && x.Code.StartsWith("RM-"))
+            .Select(x => x.Code!)
+            .ToListAsync(ct);
+
+        var maxSequence = existingCodes
+            .Select(code =>
+            {
+                var suffix = code.Length > 3 ? code[3..] : "";
+                return int.TryParse(suffix, out var n) ? n : 0;
+            })
+            .DefaultIfEmpty(0)
+            .Max();
+
+        for (var offset = 1; offset <= 1000; offset++)
+        {
+            var candidate = $"RM-{(maxSequence + offset):D6}";
+            if (!await CodeExistsAsync(tenantId, candidate, excludeRoomId: null, ct))
+                return candidate;
+        }
+
+        throw new InvalidOperationException("Unable to generate a unique room code.");
+    }
+
+    public Task<RoomAssignment?> GetAssignmentByRoomIdAsync(Guid tenantId, Guid roomId, CancellationToken ct) =>
+        db.RoomAssignments
+            .Include(x => x.ClassSection)
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.RoomId == roomId, ct);
 
     public async Task AddAsync(Room entity, CancellationToken ct) =>
         await db.Rooms.AddAsync(entity, ct);

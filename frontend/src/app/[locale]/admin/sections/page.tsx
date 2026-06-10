@@ -19,6 +19,10 @@ import {
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
+  DeleteConfirmDialog,
+  type DeleteConfirmState,
+} from "@/components/admin/delete-confirm-dialog";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -30,13 +34,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getLocalizedApiErrorMessage } from "@/lib/api/error-messages";
 import {
+  applyDeleteToListCache,
+  refreshListQueries,
+} from "@/lib/query/list-delete";
+import {
   type CreateSectionPayload,
   type Section,
   type UpdateSectionPayload,
-  schoolClassesApi,
   sectionsApi,
 } from "@/lib/api/academic";
-import { normalizeSectionName } from "@/lib/academic/section-presets";
 import {
   createSectionFormSchema,
   type SectionFormValues,
@@ -59,12 +65,11 @@ export default function AdminSectionsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [schoolClassFilter, setSchoolClassFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Section | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [assignedSectionNames, setAssignedSectionNames] = useState<string[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
 
   const isAdmin =
     user?.roles.includes("SchoolAdmin") ||
@@ -73,13 +78,7 @@ export default function AdminSectionsPage() {
   const isActiveFilter =
     statusFilter === "active" ? true : statusFilter === "inactive" ? false : undefined;
 
-  const queryKey = ["sections", page, search, schoolClassFilter, statusFilter];
-
-  const { data: schoolClasses } = useQuery({
-    queryKey: ["school-classes-options"],
-    queryFn: () => schoolClassesApi.list({ page: 1, pageSize: 200, isActive: true }),
-    enabled: isAdmin,
-  });
+  const queryKey = ["sections", page, search, statusFilter];
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey,
@@ -88,28 +87,23 @@ export default function AdminSectionsPage() {
         page,
         pageSize: PAGE_SIZE,
         search,
-        schoolClassId: schoolClassFilter || undefined,
         isActive: isActiveFilter,
       }),
     enabled: isAdmin,
   });
 
-  const blockedSectionNames = useMemo(() => {
-    if (!editingItem) return assignedSectionNames;
-
-    const currentName = normalizeSectionName(editingItem.nameEn);
-    return assignedSectionNames.filter(
-      (name) => normalizeSectionName(name) !== currentName
-    );
-  }, [assignedSectionNames, editingItem]);
+  const { data: allSections } = useQuery({
+    queryKey: ["sections-all"],
+    queryFn: () => sectionsApi.list({ page: 1, pageSize: 100 }),
+    enabled: isAdmin && dialogOpen,
+  });
 
   const formSchema = useMemo(
     () =>
       createSectionFormSchema({
-        schoolClassRequired: tValidation("schoolClassRequired"),
         nameEnRequired: tValidation("nameEnRequired"),
         nameArRequired: tValidation("nameArRequired"),
-        classSectionDuplicate: tValidation("classSectionDuplicate"),
+        sectionNameDuplicate: tValidation("sectionNameDuplicate"),
       }),
     [tValidation]
   );
@@ -117,7 +111,7 @@ export default function AdminSectionsPage() {
   const getSaveErrorMessage = useCallback(
     (err: unknown, fallback: string) =>
       getLocalizedApiErrorMessage(err, locale, fallback, (key) =>
-        tValidation(key as "classSectionDuplicate")
+        tValidation(key as "sectionNameDuplicate")
       ),
     [locale, tValidation]
   );
@@ -126,7 +120,6 @@ export default function AdminSectionsPage() {
     resolver: zodResolver(formSchema),
     mode: "onTouched",
     defaultValues: {
-      schoolClassId: "",
       nameEn: "",
       nameAr: "",
       descriptionEn: "",
@@ -135,38 +128,12 @@ export default function AdminSectionsPage() {
     },
   });
 
-  const watchedSchoolClassId = form.watch("schoolClassId");
-  const watchedNameEn = form.watch("nameEn");
-
-  useEffect(() => {
-    if (!watchedSchoolClassId || !dialogOpen) {
-      setAssignedSectionNames([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    sectionsApi
-      .getBySchoolClass(watchedSchoolClassId)
-      .then((sections) => {
-        if (!cancelled) {
-          setAssignedSectionNames(sections.map((s) => s.sectionNameEn));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setAssignedSectionNames([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [dialogOpen, watchedSchoolClassId]);
-
   const fieldError = (name: FieldPath<SectionFormValues>) =>
     form.formState.errors[name]?.message;
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["sections"] });
+    queryClient.invalidateQueries({ queryKey: ["section-options"] });
     queryClient.invalidateQueries({ queryKey: ["school-classes"] });
   }, [queryClient]);
 
@@ -197,14 +164,22 @@ export default function AdminSectionsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => sectionsApi.delete(id),
-    onSuccess: () => {
-      toast.success(t("deleted"));
+    onSuccess: async (_result, deletedId) => {
+      applyDeleteToListCache<Section>(queryClient, ["sections"], deletedId);
       setDeletingId(null);
+      setDeleteConfirm(null);
+      toast.success(t("deleted"));
       if (data?.items.length === 1 && page > 1) setPage((p) => p - 1);
-      invalidate();
+      await refreshListQueries(queryClient, ["sections"], [
+        ["section-options"],
+        ["school-classes"],
+        ["sections-all"],
+      ]);
     },
-    onError: (err: unknown) =>
-      toast.error(getSaveErrorMessage(err, t("saveFailed"))),
+    onError: (err: unknown) => {
+      setDeletingId(null);
+      toast.error(getSaveErrorMessage(err, t("saveFailed")));
+    },
   });
 
   useEffect(() => {
@@ -217,10 +192,7 @@ export default function AdminSectionsPage() {
 
   const openCreate = () => {
     setEditingItem(null);
-    setAssignedSectionNames([]);
-    const defaultClassId = schoolClasses?.items[0]?.id ?? "";
     form.reset({
-      schoolClassId: defaultClassId,
       nameEn: "",
       nameAr: "",
       descriptionEn: "",
@@ -232,9 +204,7 @@ export default function AdminSectionsPage() {
 
   const openEdit = (item: Section) => {
     setEditingItem(item);
-    setAssignedSectionNames([]);
     form.reset({
-      schoolClassId: item.schoolClassId,
       nameEn: item.nameEn,
       nameAr: item.nameAr,
       descriptionEn: item.descriptionEn ?? "",
@@ -244,49 +214,32 @@ export default function AdminSectionsPage() {
     setDialogOpen(true);
   };
 
-  const isDuplicateNameEn = useMemo(() => {
-    if (!watchedNameEn.trim()) return false;
-    return blockedSectionNames.some(
-      (name) =>
-        normalizeSectionName(name) === normalizeSectionName(watchedNameEn)
-    );
-  }, [blockedSectionNames, watchedNameEn]);
-
   const onSubmit = (values: SectionFormValues) => {
-    const duplicate = blockedSectionNames.some(
-      (name) =>
-        normalizeSectionName(name) === normalizeSectionName(values.nameEn)
+    const payload = {
+      nameEn: values.nameEn.trim(),
+      nameAr: values.nameAr.trim(),
+      descriptionEn: values.descriptionEn?.trim() || undefined,
+      descriptionAr: values.descriptionAr?.trim() || undefined,
+      isActive: values.isActive,
+    };
+
+    const normalizedName = payload.nameEn.toLowerCase();
+    const duplicate = (allSections?.items ?? []).some(
+      (section) =>
+        section.nameEn.trim().toLowerCase() === normalizedName &&
+        section.id !== editingItem?.id
     );
 
     if (duplicate) {
-      form.setError("nameEn", {
-        type: "manual",
-        message: tValidation("classSectionDuplicate"),
-      });
-      toast.error(tValidation("classSectionDuplicate"));
+      form.setError("nameEn", { message: tValidation("sectionNameDuplicate") });
+      toast.error(tValidation("sectionNameDuplicate"));
       return;
     }
 
     if (editingItem) {
-      updateMutation.mutate({
-        id: editingItem.id,
-        payload: {
-          nameEn: values.nameEn.trim(),
-          nameAr: values.nameAr.trim(),
-          descriptionEn: values.descriptionEn?.trim() || undefined,
-          descriptionAr: values.descriptionAr?.trim() || undefined,
-          isActive: values.isActive,
-        },
-      });
+      updateMutation.mutate({ id: editingItem.id, payload });
     } else {
-      createMutation.mutate({
-        schoolClassId: values.schoolClassId,
-        nameEn: values.nameEn.trim(),
-        nameAr: values.nameAr.trim(),
-        descriptionEn: values.descriptionEn?.trim() || undefined,
-        descriptionAr: values.descriptionAr?.trim() || undefined,
-        isActive: values.isActive,
-      });
+      createMutation.mutate(payload);
     }
   };
 
@@ -352,21 +305,6 @@ export default function AdminSectionsPage() {
               </div>
               <select
                 className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
-                value={schoolClassFilter}
-                onChange={(e) => {
-                  setSchoolClassFilter(e.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">{t("allSchoolClasses")}</option>
-                {schoolClasses?.items.map((sc) => (
-                  <option key={sc.id} value={sc.id}>
-                    {pickLocalized(locale, sc.nameEn, sc.nameAr)}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value as "" | "active" | "inactive");
@@ -392,9 +330,8 @@ export default function AdminSectionsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-start p-3 font-medium">{t("schoolClass")}</th>
                       <th className="text-start p-3 font-medium">{t("name")}</th>
-                      <th className="text-start p-3 font-medium">{t("students")}</th>
+                      <th className="text-start p-3 font-medium">{t("linkedClasses")}</th>
                       <th className="text-start p-3 font-medium">{t("status")}</th>
                       <th className="text-end p-3 font-medium">{t("actions")}</th>
                     </tr>
@@ -403,16 +340,9 @@ export default function AdminSectionsPage() {
                     {data.items.map((item) => (
                       <tr key={item.id} className="border-t">
                         <td className="p-3">
-                          {pickLocalized(
-                            locale,
-                            item.schoolClassNameEn,
-                            item.schoolClassNameAr
-                          )}
-                        </td>
-                        <td className="p-3">
                           {pickLocalized(locale, item.nameEn, item.nameAr)}
                         </td>
-                        <td className="p-3">{item.studentCount}</td>
+                        <td className="p-3">{item.linkedClassCount}</td>
                         <td className="p-3">
                           <span
                             className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -444,10 +374,10 @@ export default function AdminSectionsPage() {
                                   item.nameEn,
                                   item.nameAr
                                 );
-                                if (window.confirm(t("deleteConfirm", { name }))) {
-                                  setDeletingId(item.id);
-                                  deleteMutation.mutate(item.id);
-                                }
+                                setDeleteConfirm({
+                                  id: item.id,
+                                  description: t("deleteConfirm", { name }),
+                                });
                               }}
                             >
                               {deleteMutation.isPending &&
@@ -513,37 +443,6 @@ export default function AdminSectionsPage() {
                 className="space-y-4"
                 noValidate
               >
-                <div className="space-y-2">
-                  <Label htmlFor="schoolClassId">{t("schoolClass")}</Label>
-                  <select
-                    id="schoolClassId"
-                    disabled={!!editingItem}
-                    aria-invalid={!!fieldError("schoolClassId")}
-                    className={cn(
-                      "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60",
-                      fieldClass(!!fieldError("schoolClassId"))
-                    )}
-                    {...form.register("schoolClassId")}
-                  >
-                    <option value="">{t("selectSchoolClass")}</option>
-                    {schoolClasses?.items.map((sc) => (
-                      <option key={sc.id} value={sc.id}>
-                        {pickLocalized(locale, sc.nameEn, sc.nameAr)}
-                      </option>
-                    ))}
-                  </select>
-                  {fieldError("schoolClassId") && (
-                    <p className="text-xs text-destructive" role="alert">
-                      {fieldError("schoolClassId")}
-                    </p>
-                  )}
-                  {!editingItem && assignedSectionNames.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {t("sectionAlreadyAssigned")}:{" "}
-                      {assignedSectionNames.join(", ")}
-                    </p>
-                  )}
-                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="nameEn">{t("nameEn")}</Label>
@@ -554,9 +453,9 @@ export default function AdminSectionsPage() {
                       className={fieldClass(!!fieldError("nameEn"))}
                       {...form.register("nameEn")}
                     />
-                    {(fieldError("nameEn") || isDuplicateNameEn) && (
+                    {fieldError("nameEn") && (
                       <p className="text-xs text-destructive" role="alert">
-                        {fieldError("nameEn") ?? tValidation("classSectionDuplicate")}
+                        {fieldError("nameEn")}
                       </p>
                     )}
                   </div>
@@ -633,6 +532,18 @@ export default function AdminSectionsPage() {
           </Card>
         </div>
       )}
+
+      <DeleteConfirmDialog
+        state={deleteConfirm}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteConfirm(null);
+        }}
+        isPending={deleteMutation.isPending}
+        onConfirm={(id) => {
+          setDeletingId(id);
+          deleteMutation.mutate(id);
+        }}
+      />
     </DashboardShell>
   );
 }

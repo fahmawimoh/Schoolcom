@@ -8,7 +8,6 @@ using SchoolCom.Domain.Entities;
 namespace SchoolCom.Application.Features.Sections.Commands.CreateSection;
 
 public record CreateSectionCommand(
-    Guid SchoolClassId,
     string NameEn,
     string NameAr,
     string? DescriptionEn,
@@ -19,7 +18,6 @@ public class CreateSectionCommandValidator : AbstractValidator<CreateSectionComm
 {
     public CreateSectionCommandValidator()
     {
-        RuleFor(x => x.SchoolClassId).NotEmpty();
         RuleFor(x => x.NameEn).NotEmpty().MaximumLength(100);
         RuleFor(x => x.NameAr).NotEmpty().MaximumLength(100);
         RuleFor(x => x.DescriptionEn).MaximumLength(500);
@@ -37,23 +35,18 @@ public class CreateSectionCommandHandler(
         var tenantId = currentUser.TenantId
             ?? throw new UnauthorizedAccessException("Tenant not found");
 
-        if (!await repo.SchoolClassExistsAsync(tenantId, request.SchoolClassId, ct))
-            throw new KeyNotFoundException("School class not found");
-
-        if (await repo.ClassSectionExistsAsync(
-                tenantId, request.SchoolClassId, request.NameEn, excludeSectionId: null, ct))
+        if (await repo.NameExistsAsync(tenantId, request.NameEn, excludeSectionId: null, ct))
         {
             throw new ConflictException(
-                AcademicErrorCodes.ClassSectionDuplicate,
-                AcademicErrorMessages.ClassSectionDuplicateEn,
-                AcademicErrorMessages.ClassSectionDuplicateAr,
-                AcademicTranslationKeys.ClassSectionDuplicate);
+                AcademicErrorCodes.SectionNameDuplicate,
+                AcademicErrorMessages.SectionNameDuplicateEn,
+                AcademicErrorMessages.SectionNameDuplicateAr,
+                AcademicTranslationKeys.SectionNameDuplicate);
         }
 
         var entity = new Section
         {
             TenantId = tenantId,
-            SchoolClassId = request.SchoolClassId,
             NameEn = request.NameEn.Trim(),
             NameAr = request.NameAr.Trim(),
             DescriptionEn = string.IsNullOrWhiteSpace(request.DescriptionEn) ? null : request.DescriptionEn.Trim(),
@@ -65,20 +58,14 @@ public class CreateSectionCommandHandler(
         await repo.SaveChangesAsync(ct);
         await audit.LogAsync("Create", "Section", entity.Id, ct: ct);
 
-        var created = await repo.GetByIdAsync(tenantId, entity.Id, ct)
-            ?? throw new InvalidOperationException("Failed to load created section");
-
         return new SectionDto(
-            created.Id,
-            created.SchoolClassId,
-            created.SchoolClass.NameEn,
-            created.SchoolClass.NameAr,
-            created.NameEn,
-            created.NameAr,
-            created.DescriptionEn,
-            created.DescriptionAr,
-            created.IsActive,
-            created.Students.Count,
-            created.CreatedAt);
+            entity.Id,
+            entity.NameEn,
+            entity.NameAr,
+            entity.DescriptionEn,
+            entity.DescriptionAr,
+            entity.IsActive,
+            0,
+            entity.CreatedAt);
     }
 }

@@ -1,6 +1,9 @@
 using FluentValidation;
 using MediatR;
+using SchoolCom.Application.Common;
+using SchoolCom.Application.Common.Exceptions;
 using SchoolCom.Application.Common.Interfaces;
+using SchoolCom.Application.Features.ClassSections;
 using SchoolCom.Domain.Entities;
 
 namespace SchoolCom.Application.Features.SchoolClasses.Commands.CreateSchoolClass;
@@ -12,7 +15,7 @@ public record CreateSchoolClassCommand(
     string? DescriptionAr,
     int SortOrder,
     bool IsActive = true,
-    IReadOnlyList<SchoolClassSectionInput>? Sections = null) : IRequest<SchoolClassDto>;
+    IReadOnlyList<Guid>? SectionIds = null) : IRequest<SchoolClassDto>;
 
 public class CreateSchoolClassCommandValidator : AbstractValidator<CreateSchoolClassCommand>
 {
@@ -23,16 +26,13 @@ public class CreateSchoolClassCommandValidator : AbstractValidator<CreateSchoolC
         RuleFor(x => x.DescriptionEn).MaximumLength(500);
         RuleFor(x => x.DescriptionAr).MaximumLength(500);
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
-        RuleForEach(x => x.Sections).ChildRules(section =>
-        {
-            section.RuleFor(s => s.NameEn).NotEmpty().MaximumLength(100);
-            section.RuleFor(s => s.NameAr).NotEmpty().MaximumLength(100);
-        });
+        RuleFor(x => x.SectionIds).NotEmpty();
     }
 }
 
 public class CreateSchoolClassCommandHandler(
     ISchoolClassRepository repo,
+    IClassSectionRepository classSectionRepo,
     ICurrentUserService currentUser,
     IAuditService audit) : IRequestHandler<CreateSchoolClassCommand, SchoolClassDto>
 {
@@ -41,7 +41,20 @@ public class CreateSchoolClassCommandHandler(
         var tenantId = currentUser.TenantId
             ?? throw new UnauthorizedAccessException("Tenant not found");
 
-        SchoolClassSectionValidator.EnsureNoDuplicateNamesInRequest(request.Sections);
+        SchoolClassSectionValidator.EnsureSectionsProvided(request.SectionIds);
+        SchoolClassSectionValidator.EnsureNoDuplicateSectionIds(request.SectionIds!);
+
+        if (await repo.NameExistsAsync(tenantId, request.NameEn, excludeId: null, ct))
+        {
+            throw new ConflictException(
+                AcademicErrorCodes.SchoolClassNameDuplicate,
+                AcademicErrorMessages.SchoolClassNameDuplicateEn,
+                AcademicErrorMessages.SchoolClassNameDuplicateAr,
+                AcademicTranslationKeys.SchoolClassNameDuplicate);
+        }
+
+        if (!await classSectionRepo.AllSectionsExistAsync(tenantId, request.SectionIds!, ct))
+            throw new KeyNotFoundException("One or more sections were not found");
 
         var entity = new SchoolClass
         {
@@ -54,26 +67,16 @@ public class CreateSchoolClassCommandHandler(
             IsActive = request.IsActive
         };
 
-        if (request.Sections is { Count: > 0 })
-        {
-            foreach (var section in request.Sections)
-            {
-                entity.Sections.Add(new Section
-                {
-                    TenantId = tenantId,
-                    NameEn = section.NameEn.Trim(),
-                    NameAr = section.NameAr.Trim(),
-                    IsActive = true
-                });
-            }
-        }
-
         await repo.AddAsync(entity, ct);
+        await repo.SaveChangesAsync(ct);
+
+        await classSectionRepo.SyncLinksAsync(tenantId, entity.Id, request.SectionIds!, ct);
         await repo.SaveChangesAsync(ct);
         await audit.LogAsync("Create", "SchoolClass", entity.Id, ct: ct);
 
-        return new SchoolClassDto(
-            entity.Id, entity.NameEn, entity.NameAr, entity.DescriptionEn, entity.DescriptionAr,
-            entity.SortOrder, entity.IsActive, entity.Sections.Count, 0, entity.CreatedAt);
+        var created = await repo.GetByIdAsync(tenantId, entity.Id, ct)
+            ?? throw new InvalidOperationException("Failed to load created school class");
+
+        return SchoolClassMapper.ToDto(created);
     }
 }

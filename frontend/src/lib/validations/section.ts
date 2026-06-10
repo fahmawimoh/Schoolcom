@@ -1,15 +1,13 @@
 import { z } from "zod";
 
 export type SectionValidationMessages = {
-  schoolClassRequired: string;
   nameEnRequired: string;
   nameArRequired: string;
-  classSectionDuplicate: string;
+  sectionNameDuplicate: string;
 };
 
 export function createSectionFormSchema(messages: SectionValidationMessages) {
   return z.object({
-    schoolClassId: z.string().min(1, messages.schoolClassRequired),
     nameEn: z.string().min(1, messages.nameEnRequired).max(100),
     nameAr: z.string().min(1, messages.nameArRequired).max(100),
     descriptionEn: z.string().max(500).optional(),

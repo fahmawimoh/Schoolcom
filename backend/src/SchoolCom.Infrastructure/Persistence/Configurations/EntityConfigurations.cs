@@ -149,13 +149,18 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
         builder.HasIndex(x => new { x.TenantId, x.SchoolClassId });
         builder.HasIndex(x => new { x.TenantId, x.SectionId });
         builder.HasIndex(x => new { x.TenantId, x.IsActive });
+        builder.HasIndex(x => x.ClassSectionId);
         builder.HasOne(x => x.SchoolClass)
             .WithMany(x => x.Students)
             .HasForeignKey(x => x.SchoolClassId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Section)
-            .WithMany(x => x.Students)
+            .WithMany()
             .HasForeignKey(x => x.SectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.ClassSection)
+            .WithMany(x => x.Students)
+            .HasForeignKey(x => x.ClassSectionId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Parent)
             .WithMany()
@@ -183,6 +188,9 @@ public class SchoolClassConfiguration : IEntityTypeConfiguration<SchoolClass>
         builder.Property(x => x.NameAr).IsRequired().HasMaxLength(100);
         builder.Property(x => x.DescriptionEn).HasMaxLength(500);
         builder.Property(x => x.DescriptionAr).HasMaxLength(500);
+        builder.HasIndex(x => new { x.TenantId, x.NameEn })
+            .IsUnique()
+            .HasDatabaseName("UQ_school_classes_tenant_name_en");
         builder.HasIndex(x => new { x.TenantId, x.SortOrder });
         builder.HasIndex(x => new { x.TenantId, x.IsActive });
     }
@@ -197,19 +205,53 @@ public class SectionConfiguration : IEntityTypeConfiguration<Section>
         builder.Property(x => x.NameAr).IsRequired().HasMaxLength(100);
         builder.Property(x => x.DescriptionEn).HasMaxLength(500);
         builder.Property(x => x.DescriptionAr).HasMaxLength(500);
-        builder.HasIndex(x => new { x.TenantId, x.SchoolClassId, x.NameEn })
+        builder.HasIndex(x => new { x.TenantId, x.NameEn })
             .IsUnique()
-            .HasDatabaseName("UQ_class_sections_school_class_id_section_name");
+            .HasDatabaseName("UQ_sections_tenant_name_en");
         builder.HasIndex(x => new { x.TenantId, x.IsActive });
+    }
+}
+
+public class ClassSectionConfiguration : IEntityTypeConfiguration<ClassSection>
+{
+    public void Configure(EntityTypeBuilder<ClassSection> builder)
+    {
+        builder.ToTable("class_sections");
+        builder.HasIndex(x => new { x.TenantId, x.SchoolClassId, x.SectionId })
+            .IsUnique()
+            .HasDatabaseName("UQ_class_sections_school_class_id_section_id");
         builder.HasIndex(x => x.SchoolClassId);
+        builder.HasIndex(x => x.SectionId);
         builder.HasOne(x => x.SchoolClass)
-            .WithMany(x => x.Sections)
+            .WithMany(x => x.ClassSections)
             .HasForeignKey(x => x.SchoolClassId)
             .OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(x => x.HomeroomTeacherUser)
-            .WithMany()
-            .HasForeignKey(x => x.HomeroomTeacherUserId)
-            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(x => x.Section)
+            .WithMany(x => x.ClassSections)
+            .HasForeignKey(x => x.SectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class RoomAssignmentConfiguration : IEntityTypeConfiguration<RoomAssignment>
+{
+    public void Configure(EntityTypeBuilder<RoomAssignment> builder)
+    {
+        builder.ToTable("room_assignments");
+        builder.HasIndex(x => x.ClassSectionId)
+            .IsUnique()
+            .HasDatabaseName("UQ_room_assignments_class_section_id");
+        builder.HasIndex(x => x.RoomId)
+            .IsUnique()
+            .HasDatabaseName("UQ_room_assignments_room_id");
+        builder.HasOne(x => x.ClassSection)
+            .WithMany(x => x.RoomAssignments)
+            .HasForeignKey(x => x.ClassSectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Room)
+            .WithMany(x => x.RoomAssignments)
+            .HasForeignKey(x => x.RoomId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -234,7 +276,9 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
         builder.Property(x => x.NameEn).IsRequired().HasMaxLength(100);
         builder.Property(x => x.NameAr).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Code).HasMaxLength(32);
-        builder.HasIndex(x => new { x.TenantId, x.Code });
+        builder.HasIndex(x => new { x.TenantId, x.Code })
+            .IsUnique()
+            .HasDatabaseName("UQ_rooms_tenant_code");
         builder.HasIndex(x => new { x.TenantId, x.IsActive });
     }
 }
@@ -271,6 +315,7 @@ public class TeacherAssignmentConfiguration : IEntityTypeConfiguration<TeacherAs
         builder.HasIndex(x => new { x.TeacherId, x.SchoolClassId, x.SectionId, x.SubjectId }).IsUnique();
         builder.HasIndex(x => x.SchoolClassId);
         builder.HasIndex(x => x.SectionId);
+        builder.HasIndex(x => x.ClassSectionId);
         builder.HasIndex(x => x.SubjectId);
         builder.HasOne(x => x.Teacher)
             .WithMany(x => x.Assignments)
@@ -281,8 +326,12 @@ public class TeacherAssignmentConfiguration : IEntityTypeConfiguration<TeacherAs
             .HasForeignKey(x => x.SchoolClassId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Section)
-            .WithMany(x => x.TeacherAssignments)
+            .WithMany()
             .HasForeignKey(x => x.SectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.ClassSection)
+            .WithMany(x => x.TeacherAssignments)
+            .HasForeignKey(x => x.ClassSectionId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Subject)
             .WithMany(x => x.TeacherAssignments)
@@ -298,6 +347,7 @@ public class TimetableEntryConfiguration : IEntityTypeConfiguration<TimetableEnt
         builder.ToTable("timetable_entries");
         builder.HasIndex(x => new { x.TenantId, x.SectionId, x.DayOfWeek, x.PeriodNumber }).IsUnique();
         builder.HasIndex(x => x.SchoolClassId);
+        builder.HasIndex(x => x.ClassSectionId);
         builder.HasIndex(x => x.TeacherId);
         builder.HasIndex(x => x.SubjectId);
         builder.HasIndex(x => x.RoomId);
@@ -306,8 +356,12 @@ public class TimetableEntryConfiguration : IEntityTypeConfiguration<TimetableEnt
             .HasForeignKey(x => x.SchoolClassId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Section)
-            .WithMany(x => x.TimetableEntries)
+            .WithMany()
             .HasForeignKey(x => x.SectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.ClassSection)
+            .WithMany(x => x.TimetableEntries)
+            .HasForeignKey(x => x.ClassSectionId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Teacher)
             .WithMany(x => x.TimetableEntries)
